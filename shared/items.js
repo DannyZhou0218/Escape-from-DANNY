@@ -187,13 +187,42 @@
   //   输出格式与 takeCarry **完全一致**（{ profile, raidAmmo, raidItems }）→ sim 层 / 协议零改动。
   //   语义：容器内有什么就带什么（塔科夫式：整包装走），容器被清空但保留空间规格。
   // 返回 { profile: 容器已清空的档案, raidAmmo: {口径:发数}, raidItems: [局内背包条目] }
+  // 契约7.1（v0.15.0）：档案护具 → 局内护甲实例。
+  //   entry = { itemId, durNow, durMax, armorClass, cover, name }；缺字段用 content 兜底；无护具返回 null。
+  function pickNum(v, fb) {
+    if (v === null || v === undefined || v === '') return fb;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fb;
+  }
+  function armorInstanceOf(entry, slotKey) {
+    if (!entry || !entry.itemId) return null;
+    const def = LOOT[entry.itemId] || {};
+    const durMax = Math.max(0, pickNum(entry.durMax, pickNum(def.dur, 0)));
+    const durNow = Math.max(0, pickNum(entry.durNow, durMax));
+    const armorClass = Math.max(0, pickNum(entry.armorClass, pickNum(def.armorClass, 0)));
+    const cover = (Array.isArray(entry.cover) && entry.cover.length) ? entry.cover
+      : ((Array.isArray(def.cover) && def.cover.length) ? def.cover : (slotKey === 'head' ? ['head'] : ['chest']));
+    return {
+      itemId: entry.itemId,
+      durNow: durNow,
+      durMax: durMax,
+      armorClass: armorClass,
+      cover: cover,
+      name: entry.name || def.name || entry.itemId
+    };
+  }
+  function raidArmorOf(profile) {
+    const eq = (profile && profile.equipment) || {};
+    return { armor: armorInstanceOf(eq.armor, 'armor'), helm: armorInstanceOf(eq.head, 'head') };
+  }
+
   function takeCarryFromContainers(profile) {
     const C = (typeof module !== 'undefined' && module.exports)
       ? require('./containers')
       : (typeof window !== 'undefined' ? window.EXFIL_CONTAINERS : null);
     if (!C || !C.takeAll) {
       // 容器库缺失兜底：视为空携带（不扣除任何东西，避免误吞玩家资产）
-      return { profile: profile, raidAmmo: {}, raidItems: [], raidAmmoRig: {}, raidAmmoBag: {} };
+      return { profile: profile, raidAmmo: {}, raidItems: [], raidAmmoRig: {}, raidAmmoBag: {}, raidArmor: raidArmorOf(profile) };
     }
     const r = C.takeAll(profile);
     const p = r.profile;
@@ -205,7 +234,8 @@
       raidAmmo: r.raidAmmo,
       raidItems: r.raidItems,              // 每条含 src∈{'rig','backpack'}
       raidAmmoRig: r.raidAmmoRig || {},    // 胸挂内弹药
-      raidAmmoBag: r.raidAmmoBag || {}     // 背包内弹药
+      raidAmmoBag: r.raidAmmoBag || {},     // 背包内弹药
+      raidArmor: raidArmorOf(p)                  // 契约7.1：档案护具（armor/helm）→ 局内
     };
   }
 

@@ -17,7 +17,7 @@ const Core = require('../shared/core');
 
 const PORT = parseInt(process.env.PORT || '9090', 10);
 const PUBLIC = path.join(__dirname, '..', 'public');
-const VERSION = '0.14.0';
+const VERSION = require('../package.json').version;   // 契约4（v0.15.0）：版本号单一数据源 = package.json（不再硬编码）
 const TEST_MODE = process.env.EXFIL_TEST === '1';
 
 // ---------- 崩溃日志（基线#7） ----------
@@ -40,6 +40,23 @@ const Items = require('../shared/items');
 
 // ---------- E026：联机局内结算（服务器权威档案） ----------
 const PLAYER_PROFILES = new Map(); // id -> { profile, ammoStart }
+// 契约7.4（本轮仅撤离回写）：局内磨损后的护具耐久 → 档案 equipment（无护具/缺字段静默跳过，绝不抛异常）
+function writebackArmorDurability(profile, playerId) {
+  try {
+    const p = sim.players.get(playerId);
+    if (!p || !p.armor || !profile || !profile.equipment) return;
+    for (const pair of [['armor', p.armor.armor], ['head', p.armor.helm]]) {
+      const slot = pair[0], inst = pair[1], eq = profile.equipment[slot];
+      if (!inst || !eq) continue;
+      const durNow = Number(inst.durNow);
+      if (Number.isFinite(durNow)) eq.durNow = Math.max(0, durNow);
+      if (Number.isFinite(Number(inst.durMax)) && eq.durMax === undefined) eq.durMax = Number(inst.durMax);
+      if (eq.armorClass === undefined && inst.armorClass !== undefined) eq.armorClass = inst.armorClass;
+      if (!Array.isArray(eq.cover) && Array.isArray(inst.cover)) eq.cover = inst.cover.slice();
+    }
+  } catch (e) { /* 静默：verify.js A8 会把未捕获异常判 FAIL */ }
+}
+
 function settleOnlineRaid(playerId, extracted) {
   const p = sim.players.get(playerId);
   const rec = PLAYER_PROFILES.get(playerId);
@@ -82,6 +99,7 @@ function settleOnlineRaid(playerId, extracted) {
   // 旧实现只取 .ammoLib 会把归仓弹药丢掉 —— 必须整体接收
   const settledCarry = Items.settleCarry(result, { extracted, raidAmmo: (p && p.ammoLib) || {} });
   Object.assign(result, settledCarry);
+  if (extracted) writebackArmorDurability(result, playerId); // 契约7.4：仅撤离回写耐久
   Items.ensureLoadable(result); // 保底（防止破产后无法再玩）
   saveProfileAsync(result); // E027：异步落盘，不阻塞主循环 tick
   rec.profile = result;
@@ -238,6 +256,8 @@ const server = http.createServer((req, res) => {
     if (err) { res.writeHead(404); res.end('not found'); return; }
     const ext = path.extname(full).toLowerCase();
     res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', ...NO_CACHE });
+    // 契约4：仅 / 与 /index.html 现场注入 {{VERSION}}（不缓存注入结果；无占位符时不得报错）
+    if (url === '/' || url === '/index.html') { res.end(String(data).split('{{VERSION}}').join(VERSION)); return; }
     res.end(data);
   });
 });
@@ -380,16 +400,22 @@ function enterRaid(ws, msg, forcedId) {
   const stashIndex = (typeof msg.stashIndex === 'number') ? msg.stashIndex : -1;
   const isScav = !!msg.isScav;
   let raidAmmo = {}, raidItems = [];
+  let raidArmor = { armor: null, helm: null };   // 契约7.1：档案护具 → sim.addPlayer
   if (!isScav) {
-    const carried = Items.takeCarry(profile, profile.carry);
+    // 契约5（G4）：联机携带链与单机对齐——读 rig/backpack 实体条目（takeAll 会从 containers 扣除）
+    const carried = Items.takeCarryFromContainers(profile);
     profile = carried.profile;
     raidAmmo = carried.raidAmmo;
     raidItems = carried.raidItems;
+    raidArmor = carried.raidArmor || raidArmor;   // 契约7.1：护具随携带链进局
+    // 必须落盘：携带物已从 profile.containers 扣除；不落盘 → 重进/崩溃可刷物资（E027 异步落盘）
+    saveProfileAsync(profile);
   }
   const p = sim.addPlayer(id, profile.name, {
     weapon: isScav ? randomScavWeapon() : onlineWeapon(profile, stashIndex),
     ammoLib: isScav ? {} : { ...raidAmmo },
-    inventory: isScav ? [] : raidItems.map(i => ({ ...i }))
+    inventory: isScav ? [] : raidItems.map(i => ({ ...i })),
+    raidArmor: raidArmor
   });
   if (isScav) p.isScav = true;
   PLAYER_PROFILES.set(id, { profile, ammoStart: { ...raidAmmo }, stashIndex, isScav });
@@ -452,6 +478,8 @@ wss.on('connection', (ws) => {
       pendingCommands.push({ kind: 'takeFromContainer', id: ws.playerId, containerId: msg.containerId, uid: msg.uid }); // E043
     } else if (msg.type === 'useItem' && ws.playerId) {
       pendingCommands.push({ kind: 'useItem', id: ws.playerId, index: msg.index });
+    } else if (msg.type === 'quickUse' && ws.playerId) {
+      pendingCommands.push({ kind: 'quickUse', id: ws.playerId, index: msg.index }); // 契约1：只入队，写操作在 tick 边界
     } else if (msg.type === 'dropItem' && ws.playerId) {
       pendingCommands.push({ kind: 'dropItem', id: ws.playerId, index: msg.index });
     } else if (msg.type === 'respawn' && ws.playerId) {
@@ -483,6 +511,14 @@ setInterval(() => {
       if (it) {
         const def = Items.LOOT[it.itemId];
         sim.useItem(c.id, c.index, def ? def.heal || 0 : 0,
+          def && def.ammo ? { ammoId: def.ammo.ammoId, count: def.ammo.count } : null);
+      }
+    } else if (c.kind === 'quickUse') {
+      const p = sim.players.get(c.id);
+      const it = p && p.inventory[c.index];
+      if (it) {
+        const def = Items.LOOT[it.itemId];
+        sim.quickUse(c.id, c.index, def ? def.heal || 0 : 0,
           def && def.ammo ? { ammoId: def.ammo.ammoId, count: def.ammo.count } : null);
       }
     } else if (c.kind === 'dropItem') {
