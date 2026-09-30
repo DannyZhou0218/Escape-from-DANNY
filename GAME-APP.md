@@ -2,7 +2,7 @@
 
 > 项目级指导性约束（参照 harness enginering STOCK-APP.md 范式）。
 > 适用：本游戏项目全部里程碑（M0 起，后续所有模块）。
-> 更新：2026-09-11（v0.9.0，M3 联机世界与交互闭环）
+> 更新：2026-09-30（v0.15.0，护甲/穿透系统 + 联机正确性修复 + 交付链止血）
 
 ## 运行时约定
 - 端口: **9090**（`PORT` 环境变量可覆盖）；启动前 `netstat + taskkill` 清理旧进程
@@ -24,7 +24,7 @@
 |---|---|---|
 | C→S | join {name} | 加入，回 init |
 | C→S | input {seq, keys, jump, yaw, pitch, fire} | 60Hz；跳跃走 keydown 即时通道 |
-| C→S | search / useItem / dropItem / respawn | 搜刮容器 / 使用物品 / 丢弃 / 重生（走服务器指令通道） |
+| C→S | search / useItem / quickUse / dropItem / respawn | 搜刮容器 / 使用物品 / **胸挂快捷使用** / 丢弃 / 重生（走服务器指令通道，身份一律取 `ws.playerId`） |
 | S→C | init {id, map, physics, players, world} | world 含容器战利品 + 撤离点；physics 为客户端预测单一数据源 |
 | S→C | state {t, players[{lastSeq,...}]} | 30Hz 快照；客户端回滚+重放和解（禁止 EMA） |
 | S→C | hit {shooter, target, dmg, hp, alive} | 命中广播 |
@@ -34,7 +34,9 @@
 | S→C | extractSuccess | 撤离成功（倒计时完成） |
 
 ## 验收纪律（交付前强制）
-- 交付前必须 `node verify.js 9090` → 全 PASS（当前 24 项），数据流未实测 = FAIL（A5 生死线）
+- 交付前必须 `PORT=9091 node verify.js` → 全 PASS（**当前 25 项**），数据流未实测 = FAIL（A5 生死线）
+  * 用 **9091** 而不是 9090：A1 会 taskkill 该端口，用 9090 会误杀正在跑的主线服务
+  * A6 已于 v0.15.0 改造：「页面版本号 === `/health` 的 version 且无 `{{VERSION}}` 残留」（原断言 `/v0\.1\.\d|EXFIL/` 恒真，属假校验，见 E052）
 - 服务器核心逻辑改前先跑 `npm test`（Node test runner，含 shared 浏览器语义用例）
 - 已知坑先查 `.workbuddy/ERROR.md`（当前 E001–E023，含根因与防错模式）
 
@@ -51,6 +53,11 @@ server/data.js      # 存档层：JSON 档案（仓库/货币），M1 起使用
 shared/map.js       # 地图数据（IIFE 双兼容，单一数据源）
 shared/core.js      # 纯逻辑：物理/碰撞/射线/出生点（IIFE 双兼容）
 shared/sim.js       # GameSim 模拟层（IIFE 双兼容，单机/联机共用）
+shared/grid.js      # 格子系统纯函数（仓库/装备槽尺寸、占格、堆叠）
+shared/containers.js# 装备容器（胸挂/背包内部空间）纯函数
+shared/loadout.js   # 档案契约层（stash ↔ grid/equipment 双向同步）
+shared/raidinv.js   # 局内背包视图网格（uid→坐标，零改协议载荷）
+shared/predict.js   # 客户端预测-和解步进（语义必须与 sim.stepPlayer 一致）
 public/             # 客户端（渲染 + 输入 + 音频 + 单机/联机双模式）
 maps/*.json         # 地图数据源（生成 shared/map.js 的输入）
 test/*.test.js      # 单测（core/sim/浏览器语义）
@@ -64,8 +71,11 @@ verify.js           # RVP 验收（24 项）
 - **备弹不挂在武器上**（E045）：武器实例只带**弹匣**（`ammoId`/`count`）；换弹直接从背包实体堆叠扣（`invAmmoOf` / `takeInvAmmo`），武器条目上的 `reserve` 字段已废弃（老档案会自动迁移成仓库弹药堆叠）
 - 违反后果：PM 用 5.45 这类"跨口径混用"会直接破坏核心战斗逻辑——此类缺陷由静态断言 + sim 单测双重防线拦截（见 test/sim.test.js E019 / test/browser-semantic.test.js E019）
 
-## 本机运行时路径（2026-09-11 更新，托管版本变更）
-- Node.js：`<用户目录>`（原 22.22.2 已废弃，路径变更会导致启动失败）
+## 本机运行时路径（2026-09-30 修正：原记录的 node 路径已失效）
+- Node.js（**2026-09-30 修正：原记录的 `22.22.2-2` 已不存在，按此路径启动会失败**）：
+  1. 托管 binaries：`<用户目录>`（当前实际存在的版本目录）
+  2. 会话运行时：`<用户目录>`（版本随环境变化）
+  3. **探活原则**：路径失效时先 `ls versions/` 取真实目录名，或直接遍历候选列表取第一个存在的（打包脚本已按此实现，可用 `EXFIL_NODE` 覆盖）
 - Python：`<用户目录>`（未变）
 - 约定：所有脚本/命令统一从 GAME-APP.md 读取路径，不硬编码到别处；路径失效时先 ls versions/ 目录确认真实版本目录名
 
@@ -120,3 +130,16 @@ verify.js           # RVP 验收（24 项）
   3. **预测与服务器共用同款语义**（`shared/predict.js` 的 step 与 `sim.stepPlayer` 必须一致：滑动物理/碰撞/台阶/落地吸附/跳跃）
 - **验收指标**（RVP A5d，程序化，每局必测）：`maxCorrection < 1.0m` 且 `反向跳变 ≤ 2 次`（当前实测 0.204m / 1 次）
 - **诊断入口**：浏览器控制台 `window.__lastReconcile` / `window.__maxCorrection`
+
+---
+
+## v0.15.0（2026-09-30 · 接手团队）变更摘要
+
+- **版本号单一数据源**：`package.json.version` 为唯一权威；`server/server.js` require 读取；`public/index.html` 三处用 `{{VERSION}}` 占位，由服务器对 `/`、`/index.html` 现场注入（不缓存）。
+- **护甲/穿透/命中部位**（新系统）：`content.json` 的 `ammo[口径]` 带 `dmg`/`pen`，护具带 `armorClass`/`dur`/`cover`；`sim.js` 按「头/胸」部位 + 护甲等级与穿深结算减伤与耐久消耗。配置项在 `tuning.combat`。
+- **联机事件归属**：客户端联机分支改本地状态前**必须**判 `m.id === myId`（G7 串台已修复；回归脚本 `.workbuddy/build/verify_g7_crosstalk.js`）。
+- **联机携带链**：进图携带统一走 `Items.takeCarryFromContainers(profile)`（单机与联机一致），调用后必须落盘。
+- **快捷使用**：协议 `{type:"quickUse", index}`，仅 `src === "rig"` 放行；`useItem` 语义不变。
+- **打包链**：构建脚本根目录改为 `EXFIL_SRC` / `EXFIL_DIST` / `EXFIL_NODE`（默认=脚本所在仓库）；`build_demo_package.js` 与 `verify_demo_package.js` 均带**逐文件 sha256「源码 ↔ 包内」校验**，不一致即失败（E049）。
+- **验收基础设施**：新增 `.workbuddy/build/assert-ports-free.js`（fail-open 端口守卫），验收脚本/探针全覆盖；`PORT`/`CDP_PORT` 支持环境变量覆盖。
+- 缺陷台账新增 **E049–E052**；勿回退清单见 `.workbuddy/memory/MEMORY.md` 第十八节。
