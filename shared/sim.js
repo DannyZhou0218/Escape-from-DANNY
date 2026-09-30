@@ -30,6 +30,124 @@
     return Math.max(c.hitChanceMin, Math.min(1, hc));
   }
 
+  // === ARMOR_PURE_BEGIN ===
+  // v0.15.0 护甲 / 穿透 / 命中部位纯函数（契约 3.2，公式冻结）。
+  // 全部数值走 CFG + || 兜底（热重载即时生效 / 配置缺失不崩），禁止硬编码（PLAN 铁律 3）。
+  function combatNum(key, dflt) {
+    const c = CFG.combat || {};
+    const n = Number(c[key]);
+    return Number.isFinite(n) ? n : dflt;
+  }
+  function ammoDef(ammoId) {
+    const a = (CFG.content && CFG.content.ammo) || {};
+    return ammoId ? (a[ammoId] || null) : null;
+  }
+  function lootDef(itemId) {
+    const l = (CFG.content && CFG.content.loot) || {};
+    return itemId ? (l[itemId] || null) : null;
+  }
+  function finiteOr(v, d) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : d;
+  }
+  // base = AMMO[ammoId].dmg || weapon.dmg（契约 3.1：dmg 缺失回落 weapon.dmg）
+  function baseDamageOf(ammoId, weapon) {
+    const ammo = ammoDef(ammoId);
+    const ad = ammo ? Number(ammo.dmg) : NaN;
+    if (Number.isFinite(ad) && ad > 0) return ad;
+    const wd = weapon ? Number(weapon.dmg) : NaN;
+    return Number.isFinite(wd) ? Math.max(0, wd) : 0;
+  }
+  // 穿深：缺失视为 0（契约 3.1）
+  function penOf(ammoId) {
+    const ammo = ammoDef(ammoId);
+    const pen = ammo ? Number(ammo.pen) : NaN;
+    return Number.isFinite(pen) ? Math.max(0, pen) : 0;
+  }
+  // 命中部位：头部 = 命中点 y ≥ 脚部 y + (hitboxTop − headZone)（契约 3.2）
+  function hitPartOf(hitPointY, footY, cfgOverride) {
+    const c = (cfgOverride && typeof cfgOverride === 'object') ? cfgOverride : (CFG.combat || {});
+    const hitboxTop = finiteOr(c.hitboxTop, 2.1); // 与 core.raycastPlayers 命中盒顶一致
+    const headZone = finiteOr(c.headZone, 0.30);
+    return (Number(hitPointY) >= Number(footY) + (hitboxTop - headZone)) ? 'head' : 'chest';
+  }
+  // 护具条目归一化：缺失字段从 CFG.content.loot[itemId] 兜底（数据单一数据源）
+  function normalizeArmorEntry(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const itemId = raw.itemId || raw.id || null;
+    const def = itemId ? lootDef(itemId) : null;
+    const defDur = def ? Number(def.dur) : NaN;
+    let durMax = finiteOr(raw.durMax !== undefined ? raw.durMax : defDur, NaN);
+    let durNow = finiteOr(raw.durNow !== undefined ? raw.durNow : (raw.dur !== undefined ? raw.dur : durMax), NaN);
+    if (!Number.isFinite(durMax) && Number.isFinite(durNow)) durMax = durNow;
+    if (!Number.isFinite(durNow) && Number.isFinite(durMax)) durNow = durMax;
+    durMax = Math.max(0, Number.isFinite(durMax) ? durMax : 0);
+    durNow = Math.max(0, Math.min(durMax, Number.isFinite(durNow) ? durNow : durMax));
+    const rawClass = raw.armorClass !== undefined ? raw.armorClass : (def ? def.armorClass : NaN);
+    const armorClass = Math.max(0, finiteOr(rawClass, 0));
+    const cover = Array.isArray(raw.cover) ? raw.cover.slice()
+      : (def && Array.isArray(def.cover) ? def.cover.slice() : []);
+    const name = raw.name || (def && def.name) || itemId || '护具';
+    return { itemId: itemId, name: name, armorClass: armorClass, durNow: durNow, durMax: durMax, cover: cover };
+  }
+  function armorSlotOf(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const cover = Array.isArray(raw.cover) ? raw.cover : [];
+    const slot = Array.isArray(raw.slot) ? raw.slot : (raw.slot ? [raw.slot] : []);
+    const type = raw.type || '';
+    if (cover.indexOf('head') >= 0 || slot.indexOf('head') >= 0 || type === 'helmet') return 'helm';
+    if (cover.indexOf('chest') >= 0 || slot.indexOf('armor') >= 0 || type === 'armor') return 'armor';
+    return null;
+  }
+  // raidArmor → { armor, helm }：兼容 {armor,helm} 对象 / 条目数组 / 单条目
+  function normalizeArmorState(raw) {
+    const out = { armor: null, helm: null };
+    if (!raw) return out;
+    const place = (e) => {
+      const norm = normalizeArmorEntry(e);
+      if (!norm) return;
+      const key = armorSlotOf(e) || (out.armor ? 'helm' : 'armor');
+      if (key === 'helm') { if (!out.helm) out.helm = norm; }
+      else if (!out.armor) out.armor = norm;
+      else if (!out.helm) out.helm = norm;
+    };
+    if (Array.isArray(raw)) { for (const e of raw) place(e); return out; }
+    if (raw.armor !== undefined || raw.helm !== undefined) {
+      out.armor = raw.armor ? normalizeArmorEntry(raw.armor) : null;
+      out.helm = raw.helm ? normalizeArmorEntry(raw.helm) : null;
+      return out;
+    }
+    place(raw);
+    return out;
+  }
+  function coversPart(entry, part) {
+    return !!(entry && Array.isArray(entry.cover) && entry.cover.indexOf(part) >= 0);
+  }
+  // 伤害结算（契约 3.2）：无护甲 / 护具不覆盖 / 耐久<=0 → 全额 base（向后兼容红线）
+  function resolveDamage(ammoId, weapon, part, armorState) {
+    const pos = (part === 'head') ? 'head' : 'chest';
+    let base = baseDamageOf(ammoId, weapon);
+    if (pos === 'head') base *= combatNum('headMul', 2.0); // 爆头倍率：无护具也吃（契约 3.2）
+    const entry = armorState ? armorState[(pos === 'head') ? 'helm' : 'armor'] : null;
+    if (!entry || !(entry.durNow > 0) || !coversPart(entry, pos)) {
+      return { dmg: base, base: base, part: pos, armorHit: false, absorbed: 0, durNow: entry ? entry.durNow : null, armorName: null };
+    }
+    const penetrated = penOf(ammoId) >= entry.armorClass * combatNum('armorPenPerClass', 10);
+    let mul, loss;
+    if (penetrated) {
+      mul = combatNum('penetratedMul', 0.85);
+      loss = base * combatNum('durLossPen', 0.10);
+    } else {
+      mul = Math.max(combatNum('blockedMulMin', 0.10),
+        combatNum('blockedMulBase', 0.30) - combatNum('blockedMulPerClass', 0.03) * entry.armorClass);
+      loss = base * combatNum('durLossBlock', 0.50);
+    }
+    const dmg = Math.max(0, base * mul);
+    entry.durNow = Math.max(0, entry.durNow - loss); // 耐久不得为负（契约 3.2）
+    return { dmg: dmg, base: base, part: pos, armorHit: true, absorbed: base - dmg, durNow: entry.durNow, armorName: entry.name };
+  }
+  // === ARMOR_PURE_END ===
+
   class GameSim {
     constructor(opts = {}) {
       this.players = new Map();
@@ -199,10 +317,16 @@
               this.emit('sound', { kind: 'shot', x: s.x, y: s.y, z: s.z, scav: true });
               const hitChance = computeScavHitChance(dist, tgt.speedActual || 0); // E024：移动中更难命中
               if (Math.random() < hitChance) {
-                const dmg = s.weapon ? s.weapon.dmg : 10;
-                tgt.hp = Math.max(0, tgt.hp - dmg);
-                if (tgt.hp <= 0) tgt.alive = false;
-                this.emit('hit', { shooter: s.id, target: tgt.id, dmg, hp: tgt.hp, alive: tgt.alive, fromScav: true });
+                const wpn = s.weapon || { dmg: 10 }; // 无武器兜底伤害保持 10（行为兼容）
+                const ammoId = wpn.ammo ? wpn.ammo.ammoId : null;
+                // SCAV 瞄躯干中心：头线高度的一半（走 CFG，通常判定为胸；护甲按部位生效）
+                const headLine = finiteOr((CFG.combat || {}).hitboxTop, 2.1) - finiteOr((CFG.combat || {}).headZone, 0.30);
+                const aimY = tgt.y + headLine / 2;
+                const ax = tgt.x - s.x, ay = aimY - (s.y + 1.6), az = tgt.z - s.z;
+                const al = Math.hypot(ax, ay, az) || 0.0001;
+                const part = this.hitPartAt(tgt, s.x, s.y + 1.6, s.z, ax / al, ay / al, az / al);
+                const res = this.resolveHit(tgt, wpn, ammoId, part);
+                this.emit('hit', { shooter: s.id, target: tgt.id, dmg: res.dmg, hp: tgt.hp, alive: tgt.alive, fromScav: true, part: res.part, armorHit: res.armorHit, absorbed: res.absorbed, durNow: res.durNow });
               }
             }
           }
@@ -289,6 +413,8 @@
         vx: 0, vy: 0, vz: 0,
         yaw: opts.yaw !== undefined ? opts.yaw : Math.random() * Math.PI * 2, pitch: 0,
         hp: opts.hp !== undefined ? opts.hp : CFG.player.hp, alive: true,
+        // v0.15.0 护甲（契约 3.4）：进图适配层经 opts.raidArmor 初始化；缺省 {armor:null, helm:null}
+        armor: normalizeArmorState(opts.raidArmor !== undefined ? opts.raidArmor : opts.armor),
         keys: { f: 0, b: 0, l: 0, r: 0 }, jump: false, seq: 0,
         lastShot: 0, stepAt: 0,
         weapon: opts.weapon || null, // 武器实例 {dmg, ammo:{count,ammoId}, fireRate?}，由调用方构造（sim 不依赖 items）
@@ -454,7 +580,6 @@
       inst.ammo.count--;
       this.emit('ammo', { id: shooter.id, count: inst.ammo.count, reserve: (shooter.ammoLib || {})[inst.ammo.ammoId] || 0 });
       shooter.lastShot = now;
-      const dmg = inst.dmg;
       const dir = directionFromAngles(shooter.yaw, shooter.pitch);
       const ox = shooter.x, oy = shooter.y + 1.6, oz = shooter.z;
       this.emit('sound', { kind: 'shot', x: shooter.x, y: shooter.y, z: shooter.z });
@@ -462,8 +587,9 @@
       const targets = [...this.players.values(), ...this.scavs.values()];
       const hit = raycastPlayers(MAP, targets, ox, oy, oz, dir.x, dir.y, dir.z, 120, shooter.id);
       if (hit) {
-        hit.hp = Math.max(0, hit.hp - dmg);
-        if (hit.hp <= 0) hit.alive = false;
+        const ammoId = inst.ammo ? inst.ammo.ammoId : null;
+        const part = this.hitPartAt(hit, ox, oy, oz, dir.x, dir.y, dir.z);
+        const res = this.resolveHit(hit, inst, ammoId, part);
         const isScav = !!hit.waypoints;
         // 被打的 SCAV 立即转向攻击者还击（塔克夫行为）
         if (isScav && hit.alive) {
@@ -471,7 +597,7 @@
           hit.lastTarget = { x: shooter.x, z: shooter.z };
           hit.lastSeenAt = 0; // 被打立即还击（无警觉延迟）
         }
-        this.emit('hit', { shooter: shooter.id, target: hit.id, dmg, hp: hit.hp, alive: hit.alive, isScav });
+        this.emit('hit', { shooter: shooter.id, target: hit.id, dmg: res.dmg, hp: hit.hp, alive: hit.alive, isScav, part: res.part, armorHit: res.armorHit, absorbed: res.absorbed, durNow: res.durNow });
         if (isScav && !hit.alive) {
           // M2e：SCAV 死亡留尸体（可搜刮容器：武器 + 随机杂物），尸体摸完消失
           const w = hit.weapon;
@@ -518,10 +644,39 @@
       this.emit('respawn', { id });
     }
 
+    // ---------- v0.15.0 护甲 / 穿透 / 命中部位（契约 3） ----------
+    // 命中点 y（与 core.raycastPlayers 同一水平最近点参数 t）→ 头/胸
+    hitPartAt(target, ox, oy, oz, dx, dy, dz) {
+      const denom = (dx * dx + dz * dz) || 0.0001;
+      const t = ((target.x - ox) * dx + (target.z - oz) * dz) / denom;
+      const hitY = oy + dy * (t > 0 ? t : 0);
+      return hitPartOf(hitY, target.y, null);
+    }
+    // 结算一次命中：契约 3.2 减伤 + 扣护具耐久，写回 hp/alive，返回结算明细
+    resolveHit(target, weapon, ammoId, part) {
+      const res = resolveDamage(ammoId, weapon, part, target.armor || null);
+      target.hp = Math.max(0, target.hp - res.dmg);
+      if (target.hp <= 0) target.alive = false;
+      return res;
+    }
+    // 运行时替换护具（进图适配层 / 测试用；形状见 normalizeArmorState）
+    setArmor(id, raw) {
+      const p = this.players.get(id);
+      if (!p) return null;
+      p.armor = normalizeArmorState(raw);
+      return p.armor;
+    }
+    // 快照视图：{ armor: durNow|null, helm: durNow|null }（契约 3.4，只增字段）
+    armorView(p) {
+      const st = (p && p.armor) || {};
+      const dur = (e) => (e && Number.isFinite(Number(e.durNow))) ? Number(e.durNow) : null;
+      return { armor: dur(st.armor), helm: dur(st.helm) };
+    }
+
     snapshot() {
       const players = [];
       for (const p of this.players.values()) {
-        players.push({ id: p.id, name: p.name, x: p.x, y: p.y, z: p.z, vy: p.vy || 0, yaw: p.yaw, pitch: p.pitch, hp: p.hp, alive: p.alive, lastSeq: p.seq, ammoLib: this.refreshAmmoLib(p), weapon: p.weapon ? p.weapon.weaponId : null, isScav: !!p.isScav });
+        players.push({ id: p.id, name: p.name, x: p.x, y: p.y, z: p.z, vy: p.vy || 0, yaw: p.yaw, pitch: p.pitch, hp: p.hp, alive: p.alive, lastSeq: p.seq, ammoLib: this.refreshAmmoLib(p), weapon: p.weapon ? p.weapon.weaponId : null, isScav: !!p.isScav, armor: this.armorView(p) });
       }
       const scavs = [];
       for (const s of this.scavs.values()) {

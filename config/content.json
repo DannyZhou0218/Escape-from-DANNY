@@ -10,11 +10,11 @@
   },
 
   "ammo": {
-    "545x39": { "id": "545x39", "size": [1, 1], "slot": [], "name": "5.45x39", "type": "ammo", "price": 1.2, "weight": 0.011, "caliber": "5.45", "desc": "散装弹药（1×1 格，可堆叠）" },
-    "9x18": { "id": "9x18", "size": [1, 1], "slot": [], "name": "9x18 PM", "type": "ammo", "price": 0.8, "weight": 0.010, "caliber": "9x18", "desc": "散装弹药（1×1 格，可堆叠）" },
-    "762x39": { "id": "762x39", "size": [1, 1], "slot": [], "name": "7.62x39", "type": "ammo", "price": 1.6, "weight": 0.016, "caliber": "7.62", "desc": "散装弹药（1×1 格，可堆叠）" },
-    "919": { "id": "919", "size": [1, 1], "slot": [], "name": "9x19", "type": "ammo", "price": 1, "weight": 0.010, "caliber": "9x19", "desc": "散装弹药（1×1 格，可堆叠）" },
-    "762x54": { "id": "762x54", "size": [1, 1], "slot": [], "name": "7.62x54R", "type": "ammo", "price": 3.5, "weight": 0.022, "caliber": "7.62x54", "desc": "散装弹药（1×1 格，可堆叠）" }
+    "545x39": { "id": "545x39", "size": [1, 1], "slot": [], "name": "5.45x39", "type": "ammo", "dmg": 24, "pen": 22, "price": 1.2, "weight": 0.011, "caliber": "5.45", "desc": "散装弹药（1×1 格，可堆叠）" },
+    "9x18": { "id": "9x18", "size": [1, 1], "slot": [], "name": "9x18 PM", "type": "ammo", "dmg": 14, "pen": 8, "price": 0.8, "weight": 0.010, "caliber": "9x18", "desc": "散装弹药（1×1 格，可堆叠）" },
+    "762x39": { "id": "762x39", "size": [1, 1], "slot": [], "name": "7.62x39", "type": "ammo", "dmg": 34, "pen": 34, "price": 1.6, "weight": 0.016, "caliber": "7.62", "desc": "散装弹药（1×1 格，可堆叠）" },
+    "919": { "id": "919", "size": [1, 1], "slot": [], "name": "9x19", "type": "ammo", "dmg": 16, "pen": 12, "price": 1, "weight": 0.010, "caliber": "9x19", "desc": "散装弹药（1×1 格，可堆叠）" },
+    "762x54": { "id": "762x54", "size": [1, 1], "slot": [], "name": "7.62x54R", "type": "ammo", "dmg": 100, "pen": 55, "price": 3.5, "weight": 0.022, "caliber": "7.62x54", "desc": "散装弹药（1×1 格，可堆叠）" }
   },
 
   "mods": {
@@ -53,11 +53,11 @@
     "bp_pilgrim": { "id": "bp_pilgrim", "size": [3, 3], "slot": ["backpack"], "name": "朝圣者背包", "type": "backpack", "weight": 1.6, "price": 1150, "container": { "w": 8, "h": 5 }, "desc": "40 格背包 · 物品不可快捷使用" },
     "bp_berkut": { "id": "bp_berkut", "size": [3, 4], "slot": ["backpack"], "name": "Berkut 大背包", "type": "backpack", "weight": 2.4, "price": 2100, "container": { "w": 10, "h": 6 }, "desc": "60 格背包 · 物品不可快捷使用" },
 
-    "armor_paca": { "id": "armor_paca", "size": [3, 3], "slot": ["armor"], "name": "PACA 软甲", "type": "armor", "weight": 2.8, "price": 480, "desc": "轻型护甲（本轮仅装备位，防护系统待做）" },
-    "armor_6b13": { "id": "armor_6b13", "size": [3, 4], "slot": ["armor"], "name": "6B13 防弹衣", "type": "armor", "weight": 4.6, "price": 1350, "desc": "军用防弹衣（本轮仅装备位，防护系统待做）" },
+    "armor_paca": { "id": "armor_paca", "size": [3, 3], "slot": ["armor"], "name": "PACA 软甲", "type": "armor", "armorClass": 2, "dur": 30, "cover": ["chest"], "weight": 2.8, "price": 480, "desc": "轻型护甲（已实装：等级 2 · 耐久 30 · 覆盖胸部）" },
+    "armor_6b13": { "id": "armor_6b13", "size": [3, 4], "slot": ["armor"], "name": "6B13 防弹衣", "type": "armor", "armorClass": 4, "dur": 50, "cover": ["chest"], "weight": 4.6, "price": 1350, "desc": "军用防弹衣（已实装：等级 4 · 耐久 50 · 覆盖胸部）" },
 
-    "helm_ssh68": { "id": "helm_ssh68", "size": [2, 2], "slot": ["head"], "name": "SSh-68 钢盔", "type": "helmet", "weight": 1.4, "price": 380, "desc": "钢制头盔（本轮仅装备位，防护系统待做）" },
-    "helm_alt": { "id": "helm_alt", "size": [2, 2], "slot": ["head"], "name": "Altyn 头盔", "type": "helmet", "weight": 2.6, "price": 2400, "desc": "重型头盔（本轮仅装备位，防护系统待做）" }
+    "helm_ssh68": { "id": "helm_ssh68", "size": [2, 2], "slot": ["head"], "name": "SSh-68 钢盔", "type": "helmet", "armorClass": 2, "dur": 20, "cover": ["head"], "weight": 1.4, "price": 380, "desc": "钢制头盔（已实装：等级 2 · 耐久 20 · 覆盖头部）" },
+    "helm_alt": { "id": "helm_alt", "size": [2, 2], "slot": ["head"], "name": "Altyn 头盔", "type": "helmet", "armorClass": 5, "dur": 40, "cover": ["head"], "weight": 2.6, "price": 2400, "desc": "重型头盔（已实装：等级 5 · 耐久 40 · 覆盖头部）" }
   },
 
   "lootPool": {

@@ -23,7 +23,17 @@
     "_说明": "枪械通用战斗参数（武器级参数在 shared/items.js 的 WEAPONS 表）",
     "shotCooldownMs": 250,
     "reloadMs": 1500,
-    "shotRange": 120
+    "shotRange": 120,
+    "headMul": 2.0,
+    "armorPenPerClass": 10,
+    "penetratedMul": 0.85,
+    "blockedMulBase": 0.30,
+    "blockedMulPerClass": 0.03,
+    "blockedMulMin": 0.10,
+    "durLossPen": 0.10,
+    "durLossBlock": 0.50,
+    "hitboxTop": 2.1,
+    "headZone": 0.30
   },
   "scav": {
     "_说明": "SCAV NPC 全参数",
