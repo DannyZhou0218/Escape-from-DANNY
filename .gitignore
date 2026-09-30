@@ -8,3 +8,10 @@ verify-report-*.txt
 dist/
 .workbuddy/_chrome_profile*/
 .workbuddy/verify-shot-*.png
+
+# 2026-09-30 接手团队：验收过程产物（不入库，避免污染包与工作树）
+.workbuddy/baseline_shots/
+.workbuddy/g7_shots/
+.workbuddy/_g7_chrome_profile/
+.workbuddy/*_shots/
+.workbuddy/_*_profile*/
