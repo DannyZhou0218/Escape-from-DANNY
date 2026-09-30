@@ -90,9 +90,10 @@ async function main() {
   if (!started) { fail('A10 关闭', '服务未启动，中止'); await writeReport(); process.exit(1); }
 
   // A3 /health（基线#9）
+  let HEALTH_VER = null; // 2026-09-30 新增：供 A6 做「页面版本 === /health 版本」一致性断言
   const h = await fetchUrl(`http://localhost:${PORT}/health`, 3000);
   if (h && h.code === 200) {
-    try { const j = JSON.parse(h.body); (j.status && j.uptime !== undefined && j.mode) ? pass('A3 /health', `HTTP200 ${JSON.stringify(j)}`) : fail('A3 /health', '缺 status/uptime/mode 字段'); }
+    try { const j = JSON.parse(h.body); HEALTH_VER = j.version || null; (j.status && j.uptime !== undefined && j.mode) ? pass('A3 /health', `HTTP200 ${JSON.stringify(j)}`) : fail('A3 /health', '缺 status/uptime/mode 字段'); }
     catch { fail('A3 /health', '响应非 JSON'); }
   } else { fail('A3 /health', `HTTP=${h ? h.code : '无响应'}`); }
 
@@ -427,10 +428,15 @@ async function main() {
   } catch (e) { fail('A5g 联机结算', `异常: ${e.message}`); }
 
   // A6 页面元素（基线#10）
+  // 2026-09-30 改造：原断言写死 /v0\.1\.\d/（永远为真，等于没测版本）。
+  //   现改为「页面里的版本号 === /health 返回的版本号」+「无未替换的 {{VERSION}} 占位符」。
   if (pg && pg.body) {
-    const hasVer = /v0\.1\.\d|EXFIL/.test(pg.body);
     const hasCanvas = /id="game"/.test(pg.body);
-    hasVer && hasCanvas ? pass('A6 页面元素', '版本号 v0.1.x + 渲染容器存在') : fail('A6 页面元素', `ver=${hasVer} canvas=${hasCanvas}`);
+    const verInPage = !!HEALTH_VER && pg.body.indexOf(HEALTH_VER) >= 0;
+    const hasRawToken = pg.body.indexOf('{{VERSION}}') >= 0;
+    (verInPage && hasCanvas && !hasRawToken)
+      ? pass('A6 页面元素', `版本号 v${HEALTH_VER} 与 /health 一致 + 渲染容器存在`)
+      : fail('A6 页面元素', `health版本=${HEALTH_VER} 页面含该版本号=${verInPage} canvas=${hasCanvas} 残留占位符=${hasRawToken}`);
   } else { fail('A6 页面元素', '无页面内容'); }
 
   // A7 前端无服务端变量泄漏

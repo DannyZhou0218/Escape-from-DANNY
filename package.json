@@ -1,6 +1,6 @@
 {
   "name": "exfil-zone",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "private": true,
   "description": "EXFIL ZONE · 逃离塔克夫类似物 — M0 技术验证（3D 第一人称像素风 + 局域网联机）",
   "main": "server/server.js",
