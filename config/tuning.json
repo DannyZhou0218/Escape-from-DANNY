@@ -1,0 +1,120 @@
+{
+  "_README": "EXFIL ZONE 调参表（唯一数据源）。改这里即生效：逻辑层需 POST /api/reload-config 或重启服务器；表现层刷新页面即可。字段说明见 GAME-APP.md「调参指南」。",
+  "physics": {
+    "_说明": "角色物理与碰撞",
+    "speed": 6,
+    "gravity": -20,
+    "jumpV": 8,
+    "playerH": 1.8,
+    "playerR": 0.45,
+    "groundTolerance": 0.15,
+    "stepHeight": 0.7,
+    "maxY": 60
+  },
+  "player": {
+    "_说明": "玩家基础属性",
+    "hp": 100,
+    "invCap": 20,
+    "overweightSpeedMul": 0.5,
+    "bareHandDmg": 12,
+    "stepSoundIntervalMs": 400
+  },
+  "combat": {
+    "_说明": "枪械通用战斗参数（武器级参数在 shared/items.js 的 WEAPONS 表）",
+    "shotCooldownMs": 250,
+    "reloadMs": 1500,
+    "shotRange": 120
+  },
+  "scav": {
+    "_说明": "SCAV NPC 全参数",
+    "count": 1,
+    "hp": 100,
+    "speed": 3.2,
+    "speedInvestigateMul": 1.3,
+    "visionRange": 25,
+    "visionAngle": 120,
+    "hearingRangeGunshot": 40,
+    "hearingRangeStep": 12,
+    "alertDelayMs": 800,
+    "fireCooldownMs": 600,
+    "fireRange": 25,
+    "engageMinDist": 9,
+    "hitChanceBase": 0.55,
+    "hitChanceMin": 0.05,
+    "hitChanceDistDiv": 50,
+    "moveAccuracyPenaltyMax": 0.55,
+    "patrolPauseMin": 0.8,
+    "patrolPauseMax": 2,
+    "waypointReachDist": 0.6,
+    "wpInitialPauseMin": 0.5,
+    "wpInitialPauseMax": 1.5,
+    "investigateSearchMs": 2000,
+    "investigateReachDist": 1.2,
+    "spawnMinDistFromPlayer": 10,
+    "weaponPool": {
+      "ak74": 0.3,
+      "pm": 0.7
+    },
+    "corpseExtraLootChance": 0.6,
+    "navGridRange": 40,
+    "navGridCell": 1,
+    "navClearance": 0.55,
+    "routePoints": 4,
+    "spawnAttempts": 60
+  },
+  "items": {
+    "_说明": "物品与战利品",
+    "containerSearchRange": 3,
+    "weaponDropWeight": 1
+  },
+  "grid": {
+    "_说明": "配装系统（塔克夫式格子）：仓库网格尺寸与装备槽。D1=真实塔克夫尺寸，仓库 10x30",
+    "stashW": 10,
+    "stashH": 30,
+    "stackMax": 60,
+    "raidCols": 10,
+    "lootCols": 8,
+    "lootRows": 5,
+    "raidRows": 10,
+    "slots": ["head", "armor", "rig", "backpack", "primary", "secondary", "melee"],
+    "containers": {
+      "_说明": "装备容器内部空间（任务 B · B1）。装备物品的 container:{w,h} 优先；未装备或无规格时用 fallback 兜底",
+      "maxDim": 20,
+      "fallbackRigW": 4,
+      "fallbackRigH": 1,
+      "fallbackBackpackW": 5,
+      "fallbackBackpackH": 3
+    }
+  },
+  "client": {
+    "_说明": "客户端表现（纯视觉，不影响判定；全部为 render 层参数）",
+    "fov": 75,
+    "cameraNear": 0.1,
+    "cameraFar": 140,
+    "mouseSensitivity": 0.0024,
+    "maxLookDeltaPerFrame": 0.5,
+    "renderRatioTiers": [
+      0.6,
+      0.45,
+      0.35,
+      0.28
+    ],
+    "lowFpsThreshold": 45,
+    "hitToastThrottleMs": 400,
+    "recoil": {
+      "pitchPerShot": 0.035,
+      "pitchRandom": 0.012,
+      "yawRandom": 0.008,
+      "decayPerFrame60": 0.92
+    },
+    "gunKick": {
+      "decayPerFrame60": 0.82,
+      "back": 0.22,
+      "up": 0.06,
+      "side": 0.15
+    },
+    "muzzleFlashMs": 70,
+    "reloadDipHeight": 0.35,
+    "hitmarkerMs": 140
+  }
+}

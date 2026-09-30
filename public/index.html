@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EXFIL ZONE · 撤离区 — v0.2.0 离线版</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #14181c; font-family: "Microsoft YaHei", system-ui, sans-serif; color: #dfe6ec; }
+  #game { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
+  #hud { position: fixed; top: 12px; left: 12px; pointer-events: none; z-index: 10; font-size: 13px; line-height: 1.7; }
+  #hud .chip { display: inline-block; background: rgba(13, 71, 161, 0.85); color: #fff; padding: 3px 10px; border-radius: 4px; margin-right: 6px; }
+  #hpbar { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%); width: 320px; height: 16px; background: #2a2f36; border: 1px solid #4a5560; border-radius: 3px; z-index: 10; }
+  #hpfill { height: 100%; width: 100%; background: linear-gradient(90deg, #c62828, #e53935); transition: width 0.3s; }
+  #hpnum { position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 11px; font-weight: bold; text-shadow: 1px 1px 0 #000; z-index: 11; pointer-events: none; }
+  #crosshair { position: fixed; top: 50%; left: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; background: rgba(255,255,255,0.85); border-radius: 50%; z-index: 10; pointer-events: none; transition: transform 0.1s; }
+  #crosshair.pop { transform: scale(2.2); }
+  /* 开火反馈：后坐力（视角上抬+枪模型后坐+枪口火光），无全屏闪 */
+  /* 受击红屏 */
+  #hitflash { position: fixed; inset: 0; background: radial-gradient(ellipse at center, rgba(220,30,30,0.25), rgba(180,0,0,0.55)); opacity: 0; pointer-events: none; z-index: 12; transition: opacity 0.35s; }
+  /* 命中标记（准星旁 X） */
+  #hitmarker { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #ff5252; font-size: 24px; font-weight: bold; text-shadow: 1px 1px 0 #000; z-index: 11; display: none; pointer-events: none; }
+  #msg { position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%); text-align: center; z-index: 46; pointer-events: none; }
+  #msg .big { font-size: 34px; font-weight: bold; color: #e53935; text-shadow: 2px 2px 0 #000; }
+  #msg .sub { font-size: 16px; color: #cfd8dc; margin-top: 8px; }
+  #guide { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(20, 24, 28, 0.94); border: 1px solid #3a434c; border-radius: 8px; padding: 26px 36px; z-index: 30; text-align: center; }
+  #guide h2 { margin: 0 0 14px; color: #4dabf7; }
+  #guide p { margin: 6px 0; font-size: 14px; color: #aeb9c2; }
+  #guide .keys { color: #ffd54f; font-weight: bold; }
+  #guide button { margin-top: 16px; padding: 10px 32px; font-size: 16px; background: #0d47a1; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+  #guide button:hover { background: #1565c0; }
+  #players { position: fixed; top: 12px; right: 12px; z-index: 10; font-size: 12px; background: rgba(13, 17, 21, 0.8); padding: 8px 12px; border-radius: 4px; min-width: 140px; }
+  #players .p { margin: 2px 0; }
+  #players .dead { color: #6b757d; text-decoration: line-through; }
+  #toast { position: fixed; top: 60px; left: 50%; transform: translateX(-50%); background: rgba(13, 71, 161, 0.9); color: #fff; padding: 6px 18px; border-radius: 4px; z-index: 46; font-size: 13px; opacity: 0; transition: opacity 0.4s; }
+  /* M1a 整备界面 */
+  #ammo { position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%); color: #ffd54f; font-size: 13px; font-weight: bold; text-shadow: 1px 1px 0 #000; z-index: 10; pointer-events: none; }
+  #weapon-name { position: fixed; bottom: 66px; left: 50%; transform: translateX(-50%); color: #dfe6ec; font-size: 12px; font-weight: bold; text-shadow: 1px 1px 0 #000; z-index: 10; pointer-events: none; letter-spacing: 1px; }
+  #lobby { position: fixed; inset: 0; background: rgba(14, 18, 22, 0.97); z-index: 40; display: flex; flex-direction: column; align-items: center; padding: 30px 20px; overflow-y: auto; }
+  #lobby h2 { color: #4dabf7; margin: 0 0 6px; }
+  #lobby .sub { color: #78909c; font-size: 12px; margin-bottom: 14px; }
+  #lobby .cols { display: flex; gap: 16px; width: 100%; max-width: 860px; }
+  #lobby .col { flex: 1; background: #1c232b; border: 1px solid #313c46; border-radius: 6px; padding: 12px; }
+  #lobby .col h3 { margin: 0 0 10px; font-size: 14px; color: #90a4ae; }
+  /* E035：局域网大厅 / 房间页（与 #lobby 同款全屏遮罩布局） */
+  #lanhall, #room { position: fixed; inset: 0; background: rgba(14, 18, 22, 0.97); z-index: 40; display: flex; flex-direction: column; align-items: center; padding: 30px 20px; overflow-y: auto; }
+  #lanhall h2, #room h2 { color: #4dabf7; margin: 0 0 6px; }
+  #lanhall .sub, #room .sub { color: #78909c; font-size: 12px; margin-bottom: 14px; }
+  #lanhall .cols, #room .cols { display: flex; gap: 16px; width: 100%; max-width: 860px; }
+  #lanhall .col, #room .col { flex: 1; background: #1c232b; border: 1px solid #313c46; border-radius: 6px; padding: 12px; }
+  #lanhall .col h3, #room .col h3 { margin: 0 0 10px; font-size: 14px; color: #90a4ae; }
+  #room-grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; max-width: 860px; margin-bottom: 16px; }
+  .pcell { width: 132px; padding: 10px; border-radius: 8px; border: 1px solid #37474f; background: #1c232b; text-align: center; }
+  .pcell.host { border-color: #ffb300; }
+  .pcell.ready { background: rgba(46, 125, 50, 0.22); }
+  .pcell .pn { font-size: 13px; color: #dfe6ec; font-weight: bold; }
+  .pcell .ps { font-size: 11px; color: #90a4ae; margin-top: 4px; }
+  .pcell.ready .ps { color: #81c784; }
+  .rtbtn { display: block; width: 100%; margin: 4px 0; padding: 8px; border: 1px solid #34414d; border-radius: 4px; background: #242e38; color: #cfd8dc; cursor: pointer; font-size: 13px; }
+  .rtbtn:hover { border-color: #4dabf7; }
+  .rtbtn.sel { background: #1565c0; color: #fff; border-color: #4dabf7; }
+  .lanitem { margin: 6px 0; padding: 8px 10px; border: 1px solid #37474f; border-radius: 6px; background: #1c232b; cursor: pointer; }
+  .lanitem:hover { border-color: #4dabf7; }
+  .lanitem .ln { color: #dfe6ec; font-size: 13px; font-weight: bold; }
+  .witem { padding: 8px 10px; margin-bottom: 8px; background: #242e38; border: 1px solid #34414d; border-radius: 4px; cursor: pointer; }
+  .witem:hover { border-color: #4dabf7; }
+  .witem.sel { border-color: #ffd54f; background: #2d3a24; }
+  .witem .n { font-weight: bold; color: #dfe6ec; font-size: 14px; }
+  .witem .d { color: #90a4ae; font-size: 12px; margin-top: 2px; }
+  #wdetail { font-size: 13px; line-height: 1.9; color: #cfd8dc; }
+  #wdetail .row { display: flex; justify-content: space-between; }
+  #wdetail .lbl { color: #90a4ae; }
+  #wdetail .val { color: #ffd54f; font-weight: bold; }
+  #lobby button { margin-top: 12px; padding: 10px 36px; font-size: 15px; border: none; border-radius: 4px; cursor: pointer; }
+  #lobby .enter { background: #2e7d32; color: #fff; }
+  #lobby .enter:disabled { background: #455a54; cursor: not-allowed; }
+  #lobby .modbtn { background: #0d47a1; color: #fff; padding: 3px 10px; font-size: 12px; border: none; border-radius: 3px; cursor: pointer; margin-left: 6px; }
+  #lobby .modbtn:hover { background: #1565c0; }
+  /* P2：配装格子（塔克夫式拖拽；坐标由 JS 计算并写入 --cell） */
+  #lobby .cols { max-width: 1160px; }
+  /* min-width:0 = BUG-A 第二道闸门：flex 项默认 min-width:auto，仓库内容（10×cell）一旦
+     超出 386px 就会反向把本列撑大，进而污染 gridMetrics 的测量 → 逐次放大。 */
+  #lobby .col-grid { flex: 0 0 386px; min-width: 0; display: flex; flex-direction: column; }
+  #lobby .col-equip { flex: 0 0 250px; }
+  /* 任务 B · B3：携带空间列（胸挂 + 背包两个容器格） */
+  #lobby .col-rig { flex: 0 0 300px; min-width: 0; }
+  #lobby .rigrow { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+  #lobby .rigrow .rglbl { flex: 0 0 34px; font-size: 12px; color: #90a4ae; padding-top: 4px; }
+  #lobby .cgrid { flex: 1; min-width: 0; max-height: 30vh; }
+  #lobby .cgrid.empty { display: flex; align-items: center; justify-content: center; min-height: 46px; color: #5b6670; font-size: 11px; border-style: dashed; }
+  #lobby .cap { font-size: 11px; color: #ffd54f; font-weight: normal; }
+  #lobby .hint { font-size: 11px; color: #78909c; margin-top: 6px; min-height: 15px; line-height: 1.5; }
+  .stashgrid { position: relative; background: #0f151b; border: 1px solid #2b3540; border-radius: 4px; overflow: auto; max-height: 52vh; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .stashgrid .gridbg { display: grid; }
+  .stashgrid .cell { box-sizing: border-box; border-right: 1px solid #19222b; border-bottom: 1px solid #19222b; }
+  .gitem { position: absolute; box-sizing: border-box; background: #242e38; border: 1px solid #3c4a58; border-radius: 3px; color: #cfd8dc; font-size: 10px; line-height: 1.15; padding: 2px 3px; overflow: hidden; cursor: grab; touch-action: none; }
+  .gitem.w { background: #27352a; border-color: #4f6f52; }
+  .gitem.sel { border-color: #ffd54f; box-shadow: inset 0 0 0 1px #ffd54f; }
+  .gitem.foc { outline: 1px solid #4dabf7; }
+  .gitem .gn { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; word-break: break-all; line-height: 1.12; font-weight: bold; color: #e8eef3; }
+  .gitem .gn .ct { color: #ffd54f; margin-left: 2px; }
+  .gitem .new { }
+  .gitem.gnew { border-color: #ffd54f; box-shadow: 0 0 0 1px rgba(255,213,79,0.55), 0 0 9px rgba(255,213,79,0.4); }
+  .gitem .gd { color: #8fa3b0; }
+  .gitem.dragging { opacity: 0.22; }
+  .gitem.ghost { position: fixed; z-index: 60; opacity: 0.85; pointer-events: none; box-shadow: 0 6px 18px rgba(0,0,0,0.5); }
+  .dropll { position: absolute; box-sizing: border-box; border: 2px solid #4dabf7; background: rgba(77,171,247,0.18); border-radius: 3px; pointer-events: none; z-index: 5; }
+  .dropll.bad { border-color: #ef5350; background: rgba(239,83,80,0.2); }
+  .equipslots { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+  .eslot { border: 1px dashed #3c4a58; border-radius: 4px; padding: 6px 7px; min-height: 50px; font-size: 11px; color: #78909c; background: #151c23; }
+  .eslot.filled { border-style: solid; border-color: #4f6f52; background: #1b271c; color: #cfd8dc; cursor: grab; touch-action: none; }
+  .eslot.hl { border-color: #4dabf7; background: rgba(77,171,247,0.16); }
+  .eslot.bad { border-color: #ef5350; background: rgba(239,83,80,0.16); }
+  .eslot .sl { font-size: 10px; color: #90a4ae; }
+  .eslot .sv { font-weight: bold; color: #e8eef3; margin-top: 2px; word-break: break-all; }
+  #money { color: #ffd54f; font-weight: bold; }
+  /* M1b 背包面板（Tab 开关，鼠标操作） */
+  #inv-panel { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 900px; max-height: 74vh; overflow-y: auto; background: rgba(16, 20, 24, 0.97); border: 1px solid #3a434c; border-radius: 8px; padding: 14px 16px; z-index: 25; font-size: 13px; display: none; }
+  #inv-panel .inv-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; border-bottom: 1px solid #2a323b; padding-bottom: 8px; }
+  #inv-panel .inv-head .t { color: #4dabf7; font-weight: bold; font-size: 15px; }
+  #inv-panel .inv-head .w { color: #90a4ae; font-size: 12px; }
+  #inv-panel .inv-head .w .val { color: #ffd54f; font-weight: bold; }
+  #inv-panel .inv-head .w .val.warn { color: #ff6b6b; }
+  #inv-panel .row { display: flex; align-items: center; justify-content: space-between; padding: 7px 8px; margin: 3px 0; background: #1c232b; border: 1px solid #2a323b; border-radius: 4px; }
+  #inv-panel .row:hover { border-color: #4dabf7; }
+  #inv-panel .row .nm { color: #dfe6ec; flex: 1; }
+  #inv-panel .row .nm .sub { color: #78909c; font-size: 11px; margin-left: 6px; }
+  #inv-panel .row .ct { color: #ffd54f; margin: 0 6px; font-weight: bold; }
+  #inv-panel .mini { background: #0d47a1; color: #fff; border: none; border-radius: 3px; font-size: 12px; padding: 3px 10px; cursor: pointer; margin-left: 5px; }
+  #inv-panel .mini:hover { background: #1565c0; }
+  #inv-panel .mini.danger { background: #8d2f2f; }
+  #inv-panel .mini.danger:hover { background: #a83a3a; }
+  #inv-empty { color: #6b757d; font-size: 12px; text-align: center; padding: 20px 0; }
+  #inv-tip { color: #78909c; font-size: 11px; margin-top: 10px; line-height: 1.5; }
+  #inv-panel .inv-body { display: flex; gap: 12px; align-items: flex-start; }
+  #inv-panel #loot-pane { flex: 0 0 auto; width: 250px; }
+  #inv-panel .loot-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  #inv-panel .loot-head .t { color: #ffd54f; font-weight: bold; font-size: 13px; }
+  #inv-panel #loot-grid { width: 250px; max-height: 52vh; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #inv-panel #loot-grid.dropok { outline: 2px solid #4dabf7; outline-offset: -2px; box-shadow: 0 0 14px rgba(77,171,247,0.45); }
+  #inv-panel .loot-tip { color: #78909c; font-size: 10px; margin-top: 6px; line-height: 1.5; }
+  #inv-panel #inv-grid { flex: 0 0 auto; width: 350px; max-height: 52vh; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #inv-panel .inv-side { flex: 1; min-width: 200px; }
+  #inv-panel #inv-list { min-height: 42px; border: 1px solid #2a323b; border-radius: 4px; padding: 8px 10px; background: #161d24; }
+  #inv-panel #inv-act { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  #inv-panel #inv-act .mini { margin-left: 0; }
+  #interact-hint { position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); color: #ffd54f; font-size: 14px; font-weight: bold; text-shadow: 1px 1px 0 #000; z-index: 10; pointer-events: none; }
+  /* M1c 撤离进度 + 结算 */
+  #extract-bar { position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%); width: 260px; height: 14px; background: #2a2f36; border: 1px solid #ffd54f; border-radius: 3px; z-index: 10; display: none; }
+  #extract-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ff8f00, #ffd54f); transition: width 0.3s; }
+  #extract-txt { position: fixed; bottom: 114px; left: 50%; transform: translateX(-50%); color: #ffd54f; font-size: 12px; font-weight: bold; text-shadow: 1px 1px 0 #000; z-index: 10; display: none; pointer-events: none; }
+  #summary { position: fixed; inset: 0; background: rgba(10, 14, 18, 0.96); z-index: 45; display: none; flex-direction: column; align-items: center; justify-content: center; }
+  #summary h2 { margin: 0 0 8px; }
+  #summary .res { font-size: 22px; margin-bottom: 14px; }
+  #summary .ok { color: #7ee787; }
+  #summary .bad { color: #ff6b6b; }
+  #summary .list { background: #1c232b; border: 1px solid #2a323b; border-radius: 6px; padding: 12px 20px; max-height: 40vh; overflow-y: auto; min-width: 320px; font-size: 13px; }
+  #summary .list .row { display: flex; justify-content: space-between; padding: 3px 0; color: #cfd8dc; }
+  #summary .list .lbl { color: #78909c; }
+  #summary button { margin-top: 18px; padding: 10px 40px; font-size: 15px; background: #2e7d32; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+  #summary button:hover { background: #388e3c; }
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="hud">
+  <span class="chip">EXFIL ZONE</span><span class="chip">v0.2.0</span><span class="chip" id="net">连接中...</span><span class="chip" id="fps">-- FPS</span>
+</div>
+<div id="players"></div>
+<div id="hpbar"><div id="hpfill"></div></div>
+<div id="hpnum">100</div>
+<div id="weapon-name">徒手</div>
+<div id="ammo">--/--</div>
+<div id="crosshair"></div>
+<div id="interact-hint"></div>
+<div id="extract-txt">撤离倒计时</div>
+<div id="extract-bar"><div id="extract-fill"></div></div>
+<div id="summary">
+  <h2>本局结算</h2>
+  <div id="summary-res" class="res ok">撤离成功</div>
+  <div id="summary-list" class="list"></div>
+  <button onclick="window._exfilFinishRaid()">返回整备</button>
+</div>
+<div id="inv-panel">
+  <div class="inv-head">
+    <span class="t" id="inv-title">背包</span>
+    <span class="w">负重 <span id="inv-w" class="val">0</span>/<span id="inv-cap">20</span> kg · 占用 <span id="inv-used">0/0</span> 格</span>
+    <button class="mini" onclick="window._exfilToggleBackpack()">关闭 (Tab)</button>
+  </div>
+  <div class="inv-body">
+    <div id="loot-pane" style="display:none">
+      <div class="loot-head"><span class="t" id="loot-title">容器</span><button class="mini" id="loot-take-all" onclick="window._exfilTakeAll()">全部拿走</button></div>
+      <div id="loot-grid" class="stashgrid" data-surface="loot"></div>
+      <div class="loot-tip">单击或拖入背包 = 拿取 · 未拿走的留在容器，可再回来拿</div>
+    </div>
+    <div id="inv-grid" class="stashgrid" data-surface="raid"></div>
+    <div class="inv-side">
+      <div id="inv-list"></div>
+      <div id="inv-act"></div>
+      <div id="inv-tip">拖动整理背包 · 双击物品旋转 · 点选后可装备 / 使用 / 丢弃</div>
+    </div>
+  </div>
+</div>
+<div id="hitmarker">×</div>
+<div id="hitflash"></div>
+<div id="msg"></div>
+<div id="toast"></div>
+<div id="lobby" style="display:none">
+  <h2>整备界面 · EXFIL ZONE</h2>
+  <div class="sub">货币: <span id="money">0</span> ₽ · 备弹库: <span id="ammo-lib">空</span> · 拖动整理仓库 · 拖动中 <span class="keys">R</span> 旋转 · 拖到左侧槽位即装备</div>
+  <div class="cols">
+    <div class="col col-equip"><h3>装备</h3><div id="equipslots" class="equipslots" data-surface="loadout"></div><div id="wdetail">选择一把武器</div></div>
+    <div class="col col-rig">
+      <h3>携带空间 <span class="cap" id="carry-cap"></span></h3>
+      <div class="rigrow">
+        <span class="rglbl">胸挂</span>
+        <div id="rig-grid" class="stashgrid cgrid" data-surface="rig"></div>
+      </div>
+      <div class="rigrow">
+        <span class="rglbl">背包</span>
+        <div id="backpack-grid" class="stashgrid cgrid" data-surface="backpack"></div>
+      </div>
+      <div id="carry-hint" class="hint">装备胸挂/背包后可放入物品 · 胸挂内物品可快捷使用</div>
+      <div id="carry-box"></div>
+      <h3 style="margin-top:14px">商人</h3>
+      <div id="trader"></div>
+    </div>
+    <div class="col col-grid"><h3>仓库<span class="cap" id="grid-cap"></span></h3><div id="stash-grid" class="stashgrid" data-surface="loadout"></div><div id="grid-hint" class="hint"></div></div>
+  </div>
+  <button id="lobby-enter" class="enter" disabled onclick="window._exfilEnterRaid()">进入地图</button>
+  <button id="lobby-enter-scav" class="enter" style="background:#5d6b3c" onclick="window._exfilEnterRaidAsScav()">以 SCAV 身份进入（随机装备 · 撤离归仓）</button>
+</div>
+<div id="lanhall" style="display:none">
+  <h2>局域网大厅 · EXFIL ZONE</h2>
+  <div class="sub">自动扫描同一 WiFi 下的房间，无需手动查 IP · 本机房间：<span id="lan-self">未创建</span></div>
+  <div class="cols">
+    <div class="col" style="min-width:320px">
+      <h3>局域网房间 <button class="mini" onclick="window._exfilRefreshLan()">刷新</button></h3>
+      <div id="lan-list"><div class="sub">扫描中…</div></div>
+    </div>
+    <div class="col" style="min-width:260px">
+      <h3>本机房间（当房主）</h3>
+      <div id="lan-mine"><div class="sub">未创建房间</div></div>
+      <button id="lan-create" class="enter" onclick="window._exfilCreateRoom()">创建房间 · 成为房主</button>
+    </div>
+  </div>
+  <div class="sub" id="lan-tip">看不到房间？① 确认大家在同一 WiFi ② 首次运行需允许 Windows 防火墙 ③ 也可直接把本机地址发给朋友</div>
+</div>
+<div id="room" style="display:none">
+  <h2 id="room-title">房间</h2>
+  <div class="sub" id="room-sub">等待玩家…</div>
+  <div id="room-grid"></div>
+  <div class="cols">
+    <div class="col" style="min-width:300px">
+      <h3>出战武器</h3>
+      <div id="room-weapon"><div class="sub">加载中…</div></div>
+    </div>
+    <div class="col" style="min-width:240px">
+      <h3>操作</h3>
+      <button id="room-ready" class="enter" onclick="window._exfilRoomReady()">准备</button>
+      <button id="room-scav" class="enter" style="background:#37474f" onclick="window._exfilRoomScav()">以 SCAV 身份出战</button>
+      <button id="room-start" class="enter" style="display:none;background:#2e7d32" onclick="window._exfilRoomStart()">开始游戏（房主）</button>
+      <button id="room-leave" class="enter" style="background:#795548" onclick="window._exfilRoomLeave()">离开房间</button>
+      <div class="sub" id="room-err" style="color:#ef9a9a"></div>
+    </div>
+  </div>
+</div>
+<div id="guide">
+  <h2>EXFIL ZONE · 撤离区（v0.2.0 离线版）</h2>
+  <p><span class="keys">WASD</span> 移动 · <span class="keys">鼠标</span> 视角 · <span class="keys">左键</span> 射击 · <span class="keys">空格</span> 跳跃 · <span class="keys">R</span> 重生</p>
+  <p>目标：体素场景 + 撤离射击循环（M1 内容陆续加入）</p>
+  <p style="color:#78909c">选择进入模式：</p>
+  <button id="enter-solo" style="background:#2e7d32">单机模式（推荐，零延迟）</button>
+  <button id="enter-online">局域网联机</button>
+  <p style="color:#78909c; margin-top:10px">单机：本地模拟，无需服务器 | 联机：需房主已开服（start.bat）</p>
+</div>
+<script src="/shared/tuning.js"></script>
+<script src="/shared/content.js"></script>
+<script src="/shared/config.js"></script>
+<script src="/shared/map.js"></script>
+<script src="/shared/core.js"></script>
+<script src="/shared/sim.js"></script>
+<script src="/shared/items.js"></script>
+<script src="/shared/grid.js"></script>
+<script src="/shared/containers.js"></script>
+<script src="/shared/loadout.js"></script>
+<script src="/shared/raidinv.js"></script>
+<script src="/shared/storage.js"></script>
+<script src="/shared/bt.js"></script>
+<script src="/shared/predict.js"></script>
+<script type="module">
+  import { startGame } from './game.js';
+  const hide = () => document.getElementById('guide').style.display = 'none';
+  document.getElementById('enter-solo').addEventListener('click', () => { hide(); startGame('solo'); });
+  document.getElementById('enter-online').addEventListener('click', () => { hide(); window._exfilShowLan(); });
+  // E035：从局域网大厅跳转过来（?join=1）→ 自动连接并进入房间
+  if (new URLSearchParams(location.search).get('join') === '1') {
+    hide();
+    setTimeout(() => window._exfilCreateRoom(), 300);
+  }
+</script>
+</body>
+</html>

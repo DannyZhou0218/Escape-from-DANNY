@@ -1,0 +1,101 @@
+{
+  "_README": "EXFIL ZONE 内容表（唯一数据源）：武器/弹药/改装/战利品/容器/撤离点。改这里即生效（POST /api/reload-config 或重启服务器 + 刷新页面）。",
+
+  "weapons": {
+    "ak74": { "id": "ak74", "size": [5, 2], "slot": ["primary", "secondary"], "name": "AK-74", "dmg": 24, "fireRate": 650, "price": 800, "slots": ["sight", "mag"], "magSize": 30, "ammoType": "545x39", "desc": "标准突击步枪（均衡）" },
+    "pm": { "id": "pm", "size": [2, 1], "slot": ["secondary"], "name": "PM 马卡洛夫", "dmg": 14, "fireRate": 320, "price": 200, "slots": ["mag"], "magSize": 8, "ammoType": "9x18", "desc": "轻便手枪（廉价起步）" },
+    "akm": { "id": "akm", "size": [5, 2], "slot": ["primary", "secondary"], "name": "AKM", "dmg": 34, "fireRate": 600, "price": 1100, "slots": ["sight", "mag"], "magSize": 30, "ammoType": "762x39", "desc": "7.62 突击步枪（高伤，射速略慢）" },
+    "mp5": { "id": "mp5", "size": [3, 2], "slot": ["primary", "secondary"], "name": "MP5", "dmg": 16, "fireRate": 800, "price": 900, "slots": ["sight", "mag"], "magSize": 30, "ammoType": "919", "desc": "冲锋枪（高射速，近距离压制）" },
+    "sv98": { "id": "sv98", "size": [5, 2], "slot": ["primary", "secondary"], "name": "SV-98 栓动狙击", "dmg": 100, "fireRate": 60, "price": 1800, "slots": ["sight"], "magSize": 5, "ammoType": "762x54", "desc": "栓动狙击枪（一枪致命，射速极慢）" }
+  },
+
+  "ammo": {
+    "545x39": { "id": "545x39", "size": [1, 1], "slot": [], "name": "5.45x39", "type": "ammo", "price": 1.2, "weight": 0.011, "caliber": "5.45", "desc": "散装弹药（1×1 格，可堆叠）" },
+    "9x18": { "id": "9x18", "size": [1, 1], "slot": [], "name": "9x18 PM", "type": "ammo", "price": 0.8, "weight": 0.010, "caliber": "9x18", "desc": "散装弹药（1×1 格，可堆叠）" },
+    "762x39": { "id": "762x39", "size": [1, 1], "slot": [], "name": "7.62x39", "type": "ammo", "price": 1.6, "weight": 0.016, "caliber": "7.62", "desc": "散装弹药（1×1 格，可堆叠）" },
+    "919": { "id": "919", "size": [1, 1], "slot": [], "name": "9x19", "type": "ammo", "price": 1, "weight": 0.010, "caliber": "9x19", "desc": "散装弹药（1×1 格，可堆叠）" },
+    "762x54": { "id": "762x54", "size": [1, 1], "slot": [], "name": "7.62x54R", "type": "ammo", "price": 3.5, "weight": 0.022, "caliber": "7.62x54", "desc": "散装弹药（1×1 格，可堆叠）" }
+  },
+
+  "mods": {
+    "pso": { "id": "pso", "size": [2, 1], "slot": [], "name": "PSO-1 瞄准镜", "type": "sight", "price": 300, "desc": "4x 光学瞄具（占瞄具槽）" }
+  },
+
+  "loot": {
+    "bandage": { "id": "bandage", "size": [1, 1], "slot": [], "name": "绷带", "type": "med", "weight": 0.1, "price": 20, "heal": 20, "desc": "简易止血（使用 +20 HP）" },
+    "ifak": { "id": "ifak", "size": [1, 1], "slot": [], "name": "IFAK 急救包", "type": "med", "weight": 0.3, "price": 80, "heal": 50, "desc": "军用急救包（使用 +50 HP）" },
+    "painkiller": { "id": "painkiller", "size": [1, 1], "slot": [], "name": "止痛药", "type": "med", "weight": 0.1, "price": 45, "heal": 15, "desc": "快速止痛（使用 +15 HP）" },
+    "splint": { "id": "splint", "size": [1, 1], "slot": [], "name": "夹板", "type": "med", "weight": 0.2, "price": 55, "heal": 30, "desc": "固定伤处（使用 +30 HP）" },
+    "ammo_box_545": { "id": "ammo_box_545", "size": [1, 1], "slot": [], "name": "5.45 弹药箱", "type": "ammo", "weight": 0.5, "price": 60, "ammo": { "ammoId": "545x39", "count": 30 }, "desc": "30 发 5.45x39" },
+    "ammo_box_9x18": { "id": "ammo_box_9x18", "size": [1, 1], "slot": [], "name": "9x18 弹药箱", "type": "ammo", "weight": 0.4, "price": 40, "ammo": { "ammoId": "9x18", "count": 20 }, "desc": "20 发 9x18 PM" },
+    "ammo_box_762x39": { "id": "ammo_box_762x39", "size": [1, 1], "slot": [], "name": "7.62x39 弹药箱", "type": "ammo", "weight": 0.6, "price": 80, "ammo": { "ammoId": "762x39", "count": 30 }, "desc": "30 发 7.62x39" },
+    "ammo_box_919": { "id": "ammo_box_919", "size": [1, 1], "slot": [], "name": "9x19 弹药箱", "type": "ammo", "weight": 0.5, "price": 50, "ammo": { "ammoId": "919", "count": 30 }, "desc": "30 发 9x19" },
+    "ammo_box_762x54": { "id": "ammo_box_762x54", "size": [1, 1], "slot": [], "name": "7.62x54R 弹药箱", "type": "ammo", "weight": 0.6, "price": 140, "ammo": { "ammoId": "762x54", "count": 10 }, "desc": "10 发 7.62x54R（狙击弹）" },
+    "junk": { "id": "junk", "size": [1, 1], "slot": [], "name": "废金属", "type": "misc", "weight": 0.2, "price": 15, "desc": "杂物，可卖给商人" },
+    "bolt": { "id": "bolt", "size": [1, 1], "slot": [], "name": "螺栓", "type": "misc", "weight": 0.1, "price": 25, "desc": "零件" },
+    "wires": { "id": "wires", "size": [1, 1], "slot": [], "name": "电线", "type": "misc", "weight": 0.3, "price": 70, "desc": "铜芯电线，商人收购" },
+    "toolbox": { "id": "toolbox", "size": [2, 2], "slot": [], "name": "工具箱", "type": "misc", "weight": 1.5, "price": 95, "desc": "维修工具，占空间但值钱" },
+    "capacitor": { "id": "capacitor", "size": [1, 1], "slot": [], "name": "电容", "type": "misc", "weight": 0.2, "price": 120, "desc": "电子元件" },
+    "gold_chain": { "id": "gold_chain", "size": [1, 1], "slot": [], "name": "金链", "type": "valuable", "weight": 0.2, "price": 320, "desc": "高价值首饰" },
+    "rolex": { "id": "rolex", "size": [1, 1], "slot": [], "name": "劳力士手表", "type": "valuable", "weight": 0.1, "price": 850, "desc": "稀有贵重品，商人高价回收" },
+    "graphics_card": { "id": "graphics_card", "size": [2, 1], "slot": [], "name": "显卡", "type": "valuable", "weight": 0.4, "price": 620, "desc": "电子黑市硬通货" },
+    "w_pm": { "id": "w_pm", "size": [2, 1], "slot": ["secondary"], "name": "PM 马卡洛夫", "type": "weapon", "weaponId": "pm", "weight": 1.2, "price": 200, "dmg": 14, "fireRate": 320, "magSize": 8, "ammoType": "9x18", "slots": ["mag"], "desc": "手枪，背包中可装备" },
+    "w_ak74": { "id": "w_ak74", "size": [5, 2], "slot": ["primary", "secondary"], "name": "AK-74", "type": "weapon", "weaponId": "ak74", "weight": 3.5, "price": 800, "dmg": 24, "fireRate": 650, "magSize": 30, "ammoType": "545x39", "slots": ["sight", "mag"], "desc": "步枪，背包中可装备" },
+    "w_akm": { "id": "w_akm", "size": [5, 2], "slot": ["primary", "secondary"], "name": "AKM", "type": "weapon", "weaponId": "akm", "weight": 3.5, "price": 1100, "dmg": 34, "fireRate": 600, "magSize": 30, "ammoType": "762x39", "slots": ["sight", "mag"], "desc": "步枪，背包中可装备" },
+    "w_mp5": { "id": "w_mp5", "size": [3, 2], "slot": ["primary", "secondary"], "name": "MP5", "type": "weapon", "weaponId": "mp5", "weight": 2.8, "price": 900, "dmg": 16, "fireRate": 800, "magSize": 30, "ammoType": "919", "slots": ["sight", "mag"], "desc": "冲锋枪，背包中可装备" },
+    "w_sv98": { "id": "w_sv98", "size": [5, 2], "slot": ["primary", "secondary"], "name": "SV-98 栓动狙击", "type": "weapon", "weaponId": "sv98", "weight": 4.5, "price": 1800, "dmg": 100, "fireRate": 60, "magSize": 5, "ammoType": "762x54", "slots": ["sight"], "desc": "狙击枪，背包中可装备" },
+
+    "rig_scav": { "id": "rig_scav", "size": [2, 1], "slot": ["rig"], "name": "简易弹挂", "type": "rig", "weight": 0.4, "price": 180, "container": { "w": 4, "h": 1 }, "desc": "4 格胸挂 · 格内物品可快捷使用" },
+    "rig_blackrock": { "id": "rig_blackrock", "size": [2, 2], "slot": ["rig"], "name": "BlackRock 胸挂", "type": "rig", "weight": 0.9, "price": 620, "container": { "w": 6, "h": 2 }, "desc": "12 格胸挂 · 格内物品可快捷使用" },
+    "rig_ana": { "id": "rig_ana", "size": [2, 2], "slot": ["rig"], "name": "ANA 战术胸挂", "type": "rig", "weight": 1.1, "price": 980, "container": { "w": 8, "h": 2 }, "desc": "16 格胸挂 · 格内物品可快捷使用" },
+
+    "bp_scav": { "id": "bp_scav", "size": [2, 2], "slot": ["backpack"], "name": "帆布挎包", "type": "backpack", "weight": 0.8, "price": 260, "container": { "w": 5, "h": 3 }, "desc": "15 格背包 · 物品不可快捷使用" },
+    "bp_pilgrim": { "id": "bp_pilgrim", "size": [3, 3], "slot": ["backpack"], "name": "朝圣者背包", "type": "backpack", "weight": 1.6, "price": 1150, "container": { "w": 8, "h": 5 }, "desc": "40 格背包 · 物品不可快捷使用" },
+    "bp_berkut": { "id": "bp_berkut", "size": [3, 4], "slot": ["backpack"], "name": "Berkut 大背包", "type": "backpack", "weight": 2.4, "price": 2100, "container": { "w": 10, "h": 6 }, "desc": "60 格背包 · 物品不可快捷使用" },
+
+    "armor_paca": { "id": "armor_paca", "size": [3, 3], "slot": ["armor"], "name": "PACA 软甲", "type": "armor", "weight": 2.8, "price": 480, "desc": "轻型护甲（本轮仅装备位，防护系统待做）" },
+    "armor_6b13": { "id": "armor_6b13", "size": [3, 4], "slot": ["armor"], "name": "6B13 防弹衣", "type": "armor", "weight": 4.6, "price": 1350, "desc": "军用防弹衣（本轮仅装备位，防护系统待做）" },
+
+    "helm_ssh68": { "id": "helm_ssh68", "size": [2, 2], "slot": ["head"], "name": "SSh-68 钢盔", "type": "helmet", "weight": 1.4, "price": 380, "desc": "钢制头盔（本轮仅装备位，防护系统待做）" },
+    "helm_alt": { "id": "helm_alt", "size": [2, 2], "slot": ["head"], "name": "Altyn 头盔", "type": "helmet", "weight": 2.6, "price": 2400, "desc": "重型头盔（本轮仅装备位，防护系统待做）" }
+  },
+
+  "lootPool": {
+    "common": [{ "item": "junk", "w": 38 }, { "item": "bandage", "w": 20 }, { "item": "bolt", "w": 12 }, { "item": "ammo_box_9x18", "w": 12 }, { "item": "wires", "w": 8 }, { "item": "ammo_box_919", "w": 6 }, { "item": "painkiller", "w": 4 }],
+    "med": [{ "item": "bandage", "w": 38 }, { "item": "ifak", "w": 26 }, { "item": "painkiller", "w": 16 }, { "item": "splint", "w": 12 }, { "item": "ammo_box_9x18", "w": 8 }],
+    "ammo": [{ "item": "ammo_box_545", "w": 32 }, { "item": "ammo_box_9x18", "w": 22 }, { "item": "ammo_box_919", "w": 22 }, { "item": "ammo_box_762x39", "w": 14 }, { "item": "junk", "w": 10 }],
+    "rare": [{ "item": "ifak", "w": 18 }, { "item": "ammo_box_545", "w": 14 }, { "item": "ammo_box_9x18", "w": 10 }, { "item": "capacitor", "w": 10 }, { "item": "w_pm", "w": 9 }, { "item": "w_ak74", "w": 7 }, { "item": "toolbox", "w": 7 }, { "item": "ammo_box_762x39", "w": 6 }, { "item": "w_mp5", "w": 6 }, { "item": "w_akm", "w": 5 }, { "item": "junk", "w": 6 }, { "item": "w_sv98", "w": 2 }],
+    "valuable": [{ "item": "gold_chain", "w": 30 }, { "item": "capacitor", "w": 28 }, { "item": "graphics_card", "w": 22 }, { "item": "wires", "w": 12 }, { "item": "rolex", "w": 8 }]
+  },
+
+  "containers": [
+    { "id": "c1", "x": -6, "z": -4, "label": "军用弹药箱", "pools": ["ammo", "common"], "respawn": false },
+    { "id": "c2", "x": 7, "z": 5, "label": "医疗柜", "pools": ["med", "med"], "respawn": false },
+    { "id": "c3", "x": 3, "z": -7, "label": "工具柜", "pools": ["common", "common", "rare"], "respawn": false },
+    { "id": "c4", "x": -10, "z": 7, "label": "铁皮箱", "pools": ["common", "rare"], "respawn": false },
+    { "id": "c5", "x": -20, "z": 0, "label": "掩体弹药箱", "pools": ["ammo", "ammo"], "respawn": false },
+    { "id": "c6", "x": 20, "z": -8, "label": "散落补给", "pools": ["common", "med"], "respawn": false },
+    { "id": "c7", "x": -28, "z": 22, "label": "废弃工具堆", "pools": ["common", "rare"], "respawn": false },
+    { "id": "c8", "x": 26, "z": 26, "label": "保险柜", "pools": ["valuable", "rare"], "respawn": false },
+    { "id": "c9", "x": -30, "z": -22, "label": "散落物资", "pools": ["common", "med"], "respawn": false },
+    { "id": "c10", "x": 28, "z": -22, "label": "电子元件箱", "pools": ["valuable", "common"], "respawn": false }
+  ],
+
+  "extracts": [
+    { "id": "e1", "x": -38, "z": 0, "radius": 5, "duration": 10, "label": "西侧撤离点" },
+    { "id": "e2", "x": 0, "z": -38, "radius": 5, "duration": 10, "label": "北侧撤离点" },
+    { "id": "e3", "x": 0, "z": 38, "radius": 5, "duration": 12, "label": "南侧撤离点" }
+  ],
+
+  "traderGoods": [
+    { "id": "ammo_box_545", "label": "5.45 弹药箱 (30发)", "price": 60 },
+    { "id": "ammo_box_9x18", "label": "9x18 弹药箱 (20发)", "price": 40 },
+    { "id": "ammo_box_919", "label": "9x19 弹药箱 (30发)", "price": 50 },
+    { "id": "ammo_box_762x39", "label": "7.62x39 弹药箱 (30发)", "price": 80 },
+    { "id": "ammo_box_762x54", "label": "7.62x54R 弹药箱 (10发)", "price": 140 },
+    { "id": "bandage", "label": "绷带 (+20HP)", "price": 20 },
+    { "id": "ifak", "label": "IFAK 急救包 (+50HP)", "price": 80 },
+    { "id": "painkiller", "label": "止痛药 (+15HP)", "price": 45 },
+    { "id": "splint", "label": "夹板 (+30HP)", "price": 55 }
+  ]
+}

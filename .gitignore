@@ -1,0 +1,10 @@
+node_modules/
+crash.log
+data/
+verify-report-*.txt
+*.log
+~$*
+.workbuddy/verify-history/
+dist/
+.workbuddy/_chrome_profile*/
+.workbuddy/verify-shot-*.png
