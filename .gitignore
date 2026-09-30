@@ -15,3 +15,5 @@ dist/
 .workbuddy/_g7_chrome_profile/
 .workbuddy/*_shots/
 .workbuddy/_*_profile*/
+.workbuddy/ui_regression/
+.workbuddy/armor_shots/
