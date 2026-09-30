@@ -44,6 +44,7 @@ const GRID_SLOT_LABEL = { primary: '主武器', secondary: '副武器', head: '�
 let raidWeapon = null;         // 进图携带的武器实例
 let localAmmoLib = {};         // 联机模式：服务器快照同步的弹药库（口径→数量）
 let raidAmmoStart = {};        // 进图时的弹药库快照（死亡结算用：局内捡的弹药丢失）
+let localArmor = { armor: null, helm: null }; // 契约 7.2：联机快照护甲视图（{durNow}|null）；单机直接读 sim
 
 // 本地状态
 const local = { x: 0, y: 0, z: 0, vy: 0, yaw: 0, pitch: 0, hp: 100, alive: true };
@@ -75,6 +76,7 @@ const bias = { x: 0, z: 0 };
 const dom = {
   hpfill: document.getElementById('hpfill'),
   hpnum: document.getElementById('hpnum'),
+  armorHud: document.getElementById('armor-hud'),
   msg: document.getElementById('msg'),
   net: document.getElementById('net'),
   players: document.getElementById('players'),
@@ -111,6 +113,7 @@ const dom = {
   summary: document.getElementById('summary'),
   summaryRes: document.getElementById('summary-res'),
   summaryList: document.getElementById('summary-list'),
+  summaryRespawn: document.getElementById('summary-respawn'),
   ammo: document.getElementById('ammo'),
   weaponName: document.getElementById('weapon-name'),
   invW: document.getElementById('inv-w'),
@@ -158,6 +161,27 @@ function setHp(hp) {
   dom.hpfill.style.width = `${Math.max(0, Math.min(100, hp))}%`;
   if (dom.hpnum) dom.hpnum.textContent = hp;
 }
+// ---------- 契约 3.6 / 7.2：护甲 HUD ----------
+// 单机：sim.players.get('solo').armor（含 durNow/durMax）；联机：applySnapshot 缓存的 {durNow}
+function currentArmor() {
+  if (mode === 'solo' && sim) { const p = sim.players.get('solo'); return (p && p.armor) || null; }
+  return localArmor;
+}
+let armorHudText = '';
+function updateArmorHUD() {
+  const el = dom.armorHud;
+  if (!el) return;
+  const st = currentArmor() || {};
+  const fmt = (e) => {
+    if (!e) return '—';
+    const n = Number(e.durNow);
+    if (!Number.isFinite(n)) return '—';
+    const m = Number(e.durMax);
+    return (Number.isFinite(m) && m > 0) ? (Math.round(n) + '/' + Math.round(m)) : String(Math.round(n));
+  };
+  const text = '护甲 ' + fmt(st.armor) + ' · 头盔 ' + fmt(st.helm);
+  if (text !== armorHudText) { armorHudText = text; el.textContent = text; }
+}
 function fireFeedback() {
   if (audio) playNoise(0.12, 0.5, 2);
   applyRecoil(); // 后坐力反馈（视角上抬 + 枪模型后坐 + 枪口火光），不再全屏闪
@@ -189,6 +213,12 @@ function handleHitEvent(ev) {
       dead = true; local.alive = false;
       if (mode === 'solo') showSummary('death'); // M1c：死亡 → 结算（装备丢失）
       else bigMsg('你被击倒了', ''); // 联机：服务器结算 + raidResult 面板（E026）
+    }
+    else if (ev.armorHit) {
+      // 契约 3.6：护具吸收 →「挡下 / 穿透」。冻结公式下穿透吸收≈15%、阻挡吸收≥70%，故用 absorbed 与 dmg 对比判定。
+      const dur = Number.isFinite(Number(ev.durNow)) ? ('（耐久 ' + Math.round(ev.durNow) + '）') : '';
+      if (Number(ev.absorbed) > Number(ev.dmg)) toast(`被护甲挡下 ${Math.round(ev.absorbed)} 伤害${dur}`);
+      else toast(`护甲被穿透！受到 ${Math.round(ev.dmg)} 伤害${dur}`);
     }
     else { toast(`受到 ${ev.dmg} 伤害`); }
   } else if (ev.shooter === myId) {
@@ -778,38 +808,60 @@ function setupOnline() {
       case 'invChanged':
         if (m.id === myId) { remoteInventory = m.items || []; if (paused) renderInventory(); }
         break;
-      case 'equipped': toast(`装备了 ${m.weaponName}`); if (paused) renderInventory(); break;
-      case 'usedItem': if (m.id === myId && paused) renderInventory(); break;
-      case 'extractStart': showExtractHUD(m); break;
-      case 'extractProgress': updateExtractHUD(m); break;
-      case 'extractSuccess':
-        hideExtractHUD();
-        raidOutcome = { extracted: true, weaponIdx: -1, inventory: [] }; // 联机：结算由服务器落档，客户端仅展示
-        showSummary('success');
+      case 'equipped':
+        // 契约 6 · G7：归属过滤——他人的装备事件不得改本地 UI
+        if (m.id === myId) { toast(`装备了 ${m.weaponName}`); if (paused) renderInventory(); }
         break;
-      case 'extractCancel': hideExtractHUD(); break;
+      case 'usedItem': if (m.id === myId && paused) renderInventory(); break;
+      case 'extractStart': if (m.id === myId) showExtractHUD(m); break;
+      case 'extractProgress': if (m.id === myId) updateExtractHUD(m); break;
+      case 'extractSuccess':
+        // 契约 6 · G7：归属过滤；自己撤离的结算路径必须保留
+        if (m.id === myId) {
+          hideExtractHUD();
+          raidOutcome = { extracted: true, weaponIdx: -1, inventory: [] }; // 联机：结算由服务器落档，客户端仅展示
+          if (sim) showSummary('success'); // 联机结算面板由 raidResult -> showOnlineSummary 展示（避免本地 sim 版崩溃）
+        }
+        break;
+      case 'extractCancel': if (m.id === myId) hideExtractHUD(); break;
       case 'ammo':
-        // 联机弹药消耗（服务器权威）→ 同步本地 HUD，不再卡旧数字
-        if (raidWeapon && raidWeapon.ammo) { raidWeapon.ammo.count = m.count; raidWeapon.ammo.reserve = m.reserve || 0; }
-        updateAmmoHUD(raidWeapon);
+        // 契约 6 · G7：联机弹药消耗（服务器权威）→ 仅同步自己的 HUD
+        if (m.id === myId) {
+          if (raidWeapon && raidWeapon.ammo) { raidWeapon.ammo.count = m.count; raidWeapon.ammo.reserve = m.reserve || 0; }
+          updateAmmoHUD(raidWeapon);
+        }
         break;
       case 'ammoRefilled':
-        // E020：服务器弹药库对象同步（reserve 现为 ammoLib）
-        if (m.reserve && typeof m.reserve === 'object') localAmmoLib = { ...m.reserve };
-        updateAmmoHUD(raidWeapon);
-        toast(`弹药已放入背包`);
+        // 契约 6 · G7：服务器弹药库对象同步（reserve 现为 ammoLib），仅认自己的事件
+        if (m.id === myId) {
+          if (m.reserve && typeof m.reserve === 'object') localAmmoLib = { ...m.reserve };
+          updateAmmoHUD(raidWeapon);
+          toast(`弹药已放入背包`);
+        }
         break;
-      case 'empty': toast('弹匣空了！按 R 换弹'); break;
-      case 'reloadStart': reloading = true; dipGun(true); break;
+      case 'empty': if (m.id === myId) toast('弹匣空了！按 R 换弹'); break;
+      case 'reloadStart': if (m.id === myId) { reloading = true; dipGun(true); } break;
       case 'reloadDone':
-        // 用服务器事件数据同步本地副本（count/reserve）
-        reloading = false; dipGun(false);
-        if (raidWeapon && raidWeapon.ammo) { raidWeapon.ammo.count = m.count; raidWeapon.ammo.reserve = m.reserve || 0; }
-        updateAmmoHUD(raidWeapon);
+        // 契约 6 · G7：用服务器事件数据同步自己的本地副本（count/reserve）
+        if (m.id === myId) {
+          reloading = false; dipGun(false);
+          if (raidWeapon && raidWeapon.ammo) { raidWeapon.ammo.count = m.count; raidWeapon.ammo.reserve = m.reserve || 0; }
+          updateAmmoHUD(raidWeapon);
+        }
         break;
       case 'hit': handleHitEvent(m); updatePlayerList(); break;
       case 'scavDead': handleScavDead(m); break;
-      case 'respawn': break;
+      case 'respawn':
+        // 契约 2 · G5：重生事件 -> 恢复本地状态并收起结算面板（仅自己的）
+        if (m.id === myId) {
+          dead = false; local.alive = true;
+          if (dom.summary) dom.summary.style.display = 'none';
+          if (dom.summaryRespawn) dom.summaryRespawn.style.display = 'none';
+          bigMsg('', '');
+          toast('已重生');
+          requestPointerLock();
+        }
+        break;
     }
   };
   // E021：输入发送与本地预测绑定在同一个 60Hz 步进里（onlineStep），不再独立 setInterval
@@ -854,6 +906,11 @@ function applySnapshot(m) {
       local.hp = p.hp;
       // E020：同步服务器弹药库（联机 HUD 备弹显示）
       if (p.ammoLib) localAmmoLib = { ...p.ammoLib };
+      // 契约 3.6/7.2：同步快照护甲视图（只增字段，值为 durNow|null）
+      localArmor = {
+        armor: (p.armor && p.armor.armor !== null && p.armor.armor !== undefined) ? { durNow: Number(p.armor.armor) } : null,
+        helm: (p.armor && p.armor.helm !== null && p.armor.helm !== undefined) ? { durNow: Number(p.armor.helm) } : null
+      };
       if (local.alive && !p.alive) { local.alive = false; dead = true; bigMsg('你被击倒了', ''); }
       if (!local.alive && p.alive) { local.alive = true; dead = false; bigMsg('', ''); }
       if (!dead) setHp(local.hp);
@@ -1620,6 +1677,14 @@ function renderRaidActions() {
   let html = '';
   if (it.isWeapon) html += '<button class="mini" onclick="window._exfilUseItem(' + i + ')">装备</button>';
   else if (def.heal || def.ammo) html += '<button class="mini" onclick="window._exfilUseItem(' + i + ')">使用</button>';
+  // 契约 1.3 · G3：胸挂内医疗品显示可点的「快捷使用」；其余（缺省 src=backpack）禁用 + 悬停提示
+  if (def.heal > 0) {
+    if (it.src === 'rig') {
+      html += '<button class="mini" data-quick-use="1" onclick="window._exfilQuickUse(' + i + ')">快捷使用</button>';
+    } else {
+      html += '<span title="需先移入胸挂"><button class="mini" data-quick-use="0" disabled>快捷使用</button></span>';
+    }
+  }
   html += '<button class="mini" onclick="window._exfilRaidRotate()">旋转</button>';
   html += '<button class="mini danger" onclick="window._exfilDropItem(' + i + ')">丢弃</button>';
   if (box) box.innerHTML = html;
@@ -1915,11 +1980,30 @@ window._exfilToggleSight = function (idx) {
   renderLobby();
 };
 // E040：单机进图统一入口（PMC 与 SCAV 共用同一条流程，只有装备来源不同）
+// 契约 7.3：从档案装备槽（armor/head）组护甲进局载荷；缺字段/无护具 → null，绝不抛异常
+function raidArmorFromProfile(prof) {
+  try {
+    const eq = (prof && prof.equipment) || {};
+    const conv = (e) => {
+      if (!e || !e.itemId) return null;
+      const out = { itemId: e.itemId };
+      if (Number.isFinite(Number(e.durNow))) out.durNow = Number(e.durNow);
+      if (Number.isFinite(Number(e.durMax))) out.durMax = Number(e.durMax);
+      if (Number.isFinite(Number(e.armorClass))) out.armorClass = Number(e.armorClass);
+      if (Array.isArray(e.cover)) out.cover = e.cover.slice();
+      if (e.name) out.name = e.name;
+      return out;
+    };
+    return { armor: conv(eq.armor), helm: conv(eq.head) };
+  } catch (e) { return { armor: null, helm: null }; }
+}
 function startSoloRaid(opts) {
   const o = opts || {};
   raidWeapon = o.weapon || null;
   dom.lobby.style.display = 'none';
-  setupSolo(raidWeapon, o.ammo || {}, o.items || []);
+  // 契约 7.3：单机透传护具（SCAV 为随机装备，不带仓库护具）
+  const raidArmor = o.raidArmor || (raidIsScav ? { armor: null, helm: null } : raidArmorFromProfile(profile));
+  setupSolo(raidWeapon, o.ammo || {}, o.items || [], raidArmor);
 }
 // E040：进图兜底——任何异常都必须「回到整备 + 显示原因 + 留痕」，绝不允许留下白屏
 // （用户实测 SCAV 白屏但开发环境无法复现，故把不可见的失败变成可见信息）
@@ -2001,6 +2085,7 @@ window.__exfilState = () => ({
   pos: { x: Math.round(local.x * 100) / 100, z: Math.round(local.z * 100) / 100 },
   yaw: Math.round(local.yaw * 1000) / 1000,
   hint: (dom.interactHint && dom.interactHint.textContent) || '',
+  armor: currentArmor(),
   locked: document.pointerLockElement === renderer.domElement,
   frames: window.__frames || 0, renders: window.__renders || 0, lastRaidError: window.__lastRaidError || null
 });
@@ -2056,6 +2141,22 @@ window.__exfilLoot = () => ({
   from: lootFrom
 });
 // 返回整备：把当前弹药/改装写回档案（M1a：装备不丢，死亡丢失 M1c 做）
+// 契约 7.4：局内护具磨损 → 档案（仅撤离成功调用；无护具/缺字段静默跳过，绝不抛异常）
+function writeBackArmorDur(p) {
+  try {
+    if (!p || !p.armor || !profile || !profile.equipment) return;
+    for (const pair of [['armor', 'armor'], ['head', 'helm']]) {
+      const inst = p.armor[pair[1]];
+      const entry = profile.equipment[pair[0]];
+      if (!inst || !entry) continue;
+      const now = Number(inst.durNow);
+      const max = Number(inst.durMax);
+      if (Number.isFinite(now)) entry.durNow = Math.max(0, Math.round(now));
+      if (Number.isFinite(max) && max > 0) entry.durMax = Math.round(max);
+      if (inst.name && !entry.name) entry.name = inst.name;
+    }
+  } catch (e) { /* 静默：护甲回写失败不得影响结算/落盘（A8） */ }
+}
 function backToLobby() {
   if (mode === 'solo' && sim && raidOutcome) {
     const p = sim.players.get('solo');
@@ -2064,6 +2165,8 @@ function backToLobby() {
       // M4 结算：撤离成功 → 局内剩余弹药【归仓】；死亡 → 携带量【丢失】（takeCarry 时已扣除）
       profile = ITEMS.settleCarry(profile, { extracted: !!raidOutcome.extracted, raidAmmo: (p && p.ammoLib) || {} });
     }
+    // 契约 7.4：仅撤离成功回写护具磨损（阵亡沿用既有结算规则，不回写、不丢甲）
+    if (raidOutcome.extracted && p) writeBackArmorDur(p);
     // M1c 结算：撤离成功 → 武器/物资入仓；死亡 → 装备丢失（SCAV 时 weaponIdx 恒为 -1，仓库不受损）
     profile = ITEMS.settleRaid(profile, raidOutcome);
     profile = LOADOUT.syncProfile(profile).profile; // P2：丢枪/归仓/弹药写回 → 合并回格子与装备槽
@@ -2071,6 +2174,7 @@ function backToLobby() {
   }
   raidIsScav = false; // E039：出局复位
   localAmmoLib = {};
+  localArmor = { armor: null, helm: null };
   sim = null;
   raidWeapon = null;
   raidOutcome = null;
@@ -2102,7 +2206,7 @@ let containerGroup = null;
 let raidOutcome = null;
 let raidExtractDuration = 10;
 
-function setupSolo(weapon, raidAmmo, raidItems) {
+function setupSolo(weapon, raidAmmo, raidItems, raidArmor) {
   PHY = CORE.PHYSICS;
   buildMap(CORE.MAP);
   // M1b：按容器配置生成战利品（{itemId, weight, count} 条目，sim 不依赖 items 表）
@@ -2119,7 +2223,7 @@ function setupSolo(weapon, raidAmmo, raidItems) {
   sim = new SIM.GameSim({ testMode: false, containers, extracts: ITEMS.EXTRACTS });
   // M4：进图弹药 = 携带量（已由 enterRaid 从仓库扣除）；记快照供诊断
   raidAmmoStart = { ...(raidAmmo || {}) };
-  sim.addPlayer('solo', myName, { weapon: weapon || null, ammoLib: { ...raidAmmoStart }, inventory: (raidItems || []).map(i => ({ ...i })) });
+  sim.addPlayer('solo', myName, { weapon: weapon || null, ammoLib: { ...raidAmmoStart }, inventory: (raidItems || []).map(i => ({ ...i })), raidArmor: raidArmor || { armor: null, helm: null } });
   sim.spawnScavs(1); // M2e：地图 1 个 SCAV，不刷新（用户拍板）
   syncScavsFromSim();
   myId = 'solo';
@@ -2329,6 +2433,7 @@ function showSummary(kind) {
   } else {
     list.innerHTML = '<div class="row"><span class="lbl">损失</span><span>携带装备与物资全部丢失</span></div>';
   }
+  if (dom.summaryRespawn) dom.summaryRespawn.style.display = (kind === 'success') ? 'none' : 'inline-block';
   dom.summary.style.display = 'flex';
 }
 // 联机结算面板（E026）：数据来自服务器 raidResult，不依赖本地 sim
@@ -2348,13 +2453,37 @@ function showOnlineSummary(m) {
       <div class="row"><span class="lbl">物资</span><span>${m.loot || 0} 件</span></div>
       <div class="row"><span class="lbl">资金</span><span>${m.money || 0}₽</span></div>`;
   } else {
-    list.innerHTML = '<div class="row"><span class="lbl">损失</span><span>携带装备与物资全部丢失</span></div>';
+    list.innerHTML = '<div class="row"><span class="lbl">损失</span><span>携带装备与物资全部丢失</span></div>'
+      + '<div class="row"><span class="lbl">规则</span><span>联机阵亡按永久结算规则落档，请返回整备大厅重新开始</span></div>';
   }
+  // 契约 2 裁定（2026-09-30）：联机死亡=永久结算（MEMORY 第六节），不提供重生窗口 -> 无条件隐藏重生按钮
+  if (dom.summaryRespawn) dom.summaryRespawn.style.display = 'none';
   dom.summary.style.display = 'flex';
 }
 window._exfilFinishRaid = function () {
   dom.summary.style.display = 'none';
   backToLobby();
+};
+// 契约 2 · G5：阵亡态重生入口（单机 sim.respawn / 联机 respawn 指令）
+window._exfilRespawn = function () {
+  // 契约 2 裁定（2026-09-30）：联机不做重生（死亡=永久结算，属产品规则）；此入口仅单机可用
+  if (mode === 'online') return;
+  if (!dead) return;
+  if (!sim) return;
+  sim.respawn('solo');
+  drainNow();
+  const p = sim.players.get('solo');
+  if (p) { local.x = p.x; local.y = p.y; local.z = p.z; local.hp = p.hp; }
+  dead = false;
+  local.alive = true;
+  raidOutcome = null; // 重生后本局继续：撤销死亡结算态，后续撤离/阵亡重新判定
+  paused = false;
+  setHp(p ? p.hp : 100);
+  if (dom.summary) dom.summary.style.display = 'none';
+  if (dom.summaryRespawn) dom.summaryRespawn.style.display = 'none';
+  bigMsg('', '');
+  toast('已重生');
+  requestPointerLock();
 };
 function buildContainers(containers) {
   const group = new THREE.Group();
@@ -2472,6 +2601,23 @@ window._exfilUseItem = function (idx) {
     attachGun(pw);
     updateAmmoHUD(pw);
   }
+  refreshInvUI();
+};
+// 契约 1.2/1.3 · G3：胸挂快捷使用（联机 quickUse 指令 / 单机 sim.quickUse）
+window._exfilQuickUse = function (idx) {
+  const src = invSource();
+  const it = src && src.items[idx];
+  if (!it || it.isWeapon) return;
+  const def = ITEMS.LOOT[it.itemId] || {};
+  // 仅「胸挂内医疗品」放行；背包内或非医疗品 -> 与按钮禁用态一致地拒绝
+  if (!(def.heal > 0) || it.src !== 'rig') { toast('需先移入胸挂'); return; }
+  if (mode === 'online') {
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'quickUse', index: idx }));
+    return;
+  }
+  if (!sim) return;
+  sim.quickUse('solo', idx, def.heal, null);
+  consumePendingUI();
   refreshInvUI();
 };
 window._exfilDropItem = function (idx) {
@@ -2718,6 +2864,10 @@ document.addEventListener('keydown', (e) => {
         }
       }
       break;
+    case 'Enter':
+      // 契约 2 · G5：阵亡态 Enter = 重生（仅单机；联机阵亡=永久结算，不提供重生）
+      if (dead && mode === 'solo') { window._exfilRespawn(); e.preventDefault(); }
+      break;
     case 'Tab':
       if ((mode === 'solo' && sim) || (mode === 'online' && connected)) { toggleBackpack(); e.preventDefault(); }
       break;
@@ -2772,6 +2922,7 @@ function animate() {
     onlineStep(dt); // 联机：预测-和解（E021）
     updateInteractHint(); // 联机也要显示"按 F 搜刮"提示
   }
+  updateArmorHUD(); // 契约 3.6：护甲/头盔耐久 HUD（单机读 sim / 联机读快照视图）
 
   // 其他玩家插值（位置 + 朝向；窗口覆盖 30Hz 快照间隔并吸收网络抖动）
   const REMOTE_LERP_MS = 100;

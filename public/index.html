@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EXFIL ZONE · 撤离区 — v0.2.0 离线版</title>
+<title>EXFIL ZONE · 撤离区 — {{VERSION}} 离线版</title>
 <style>
   html, body { margin: 0; padding: 0; overflow: hidden; background: #14181c; font-family: "Microsoft YaHei", system-ui, sans-serif; color: #dfe6ec; }
   #game { display: block; width: 100vw; height: 100vh; image-rendering: pixelated; }
@@ -35,6 +35,7 @@
   /* M1a 整备界面 */
   #ammo { position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%); color: #ffd54f; font-size: 13px; font-weight: bold; text-shadow: 1px 1px 0 #000; z-index: 10; pointer-events: none; }
   #weapon-name { position: fixed; bottom: 66px; left: 50%; transform: translateX(-50%); color: #dfe6ec; font-size: 12px; font-weight: bold; text-shadow: 1px 1px 0 #000; z-index: 10; pointer-events: none; letter-spacing: 1px; }
+  #armor-hud { position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%); color: #90caf9; font-size: 12px; font-weight: bold; text-shadow: 1px 1px 0 #000; z-index: 10; pointer-events: none; letter-spacing: 1px; }
   #lobby { position: fixed; inset: 0; background: rgba(14, 18, 22, 0.97); z-index: 40; display: flex; flex-direction: column; align-items: center; padding: 30px 20px; overflow-y: auto; }
   #lobby h2 { color: #4dabf7; margin: 0 0 6px; }
   #lobby .sub { color: #78909c; font-size: 12px; margin-bottom: 14px; }
@@ -163,12 +164,13 @@
 <body>
 <div id="game"></div>
 <div id="hud">
-  <span class="chip">EXFIL ZONE</span><span class="chip">v0.2.0</span><span class="chip" id="net">连接中...</span><span class="chip" id="fps">-- FPS</span>
+  <span class="chip">EXFIL ZONE</span><span class="chip">{{VERSION}}</span><span class="chip" id="net">连接中...</span><span class="chip" id="fps">-- FPS</span>
 </div>
 <div id="players"></div>
 <div id="hpbar"><div id="hpfill"></div></div>
 <div id="hpnum">100</div>
 <div id="weapon-name">徒手</div>
+<div id="armor-hud">护甲 — · 头盔 —</div>
 <div id="ammo">--/--</div>
 <div id="crosshair"></div>
 <div id="interact-hint"></div>
@@ -178,6 +180,7 @@
   <h2>本局结算</h2>
   <div id="summary-res" class="res ok">撤离成功</div>
   <div id="summary-list" class="list"></div>
+  <button id="summary-respawn" style="display:none;background:#455a64" onclick="window._exfilRespawn()">重生</button>
   <button onclick="window._exfilFinishRaid()">返回整备</button>
 </div>
 <div id="inv-panel">
@@ -265,8 +268,8 @@
   </div>
 </div>
 <div id="guide">
-  <h2>EXFIL ZONE · 撤离区（v0.2.0 离线版）</h2>
-  <p><span class="keys">WASD</span> 移动 · <span class="keys">鼠标</span> 视角 · <span class="keys">左键</span> 射击 · <span class="keys">空格</span> 跳跃 · <span class="keys">R</span> 重生</p>
+  <h2>EXFIL ZONE · 撤离区（{{VERSION}} 离线版）</h2>
+  <p><span class="keys">WASD</span> 移动 · <span class="keys">鼠标</span> 视角 · <span class="keys">左键</span> 射击 · <span class="keys">空格</span> 跳跃 · <span class="keys">R</span> 换弹 · <span class="keys">Enter</span> 阵亡后重生（单机）</p>
   <p>目标：体素场景 + 撤离射击循环（M1 内容陆续加入）</p>
   <p style="color:#78909c">选择进入模式：</p>
   <button id="enter-solo" style="background:#2e7d32">单机模式（推荐，零延迟）</button>
