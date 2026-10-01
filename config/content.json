@@ -96,6 +96,10 @@
     { "id": "bandage", "label": "绷带 (+20HP)", "price": 20 },
     { "id": "ifak", "label": "IFAK 急救包 (+50HP)", "price": 80 },
     { "id": "painkiller", "label": "止痛药 (+15HP)", "price": 45 },
-    { "id": "splint", "label": "夹板 (+30HP)", "price": 55 }
+    { "id": "splint", "label": "夹板 (+30HP)", "price": 55 },
+    { "id": "helm_ssh68", "label": "SSh-68 钢盔（2 级 · 护头）", "price": 620 },
+    { "id": "armor_paca", "label": "PACA 软甲（2 级 · 护胸）", "price": 780 },
+    { "id": "armor_6b13", "label": "6B13 防弹衣（4 级 · 护胸）", "price": 2200 },
+    { "id": "helm_alt", "label": "Altyn 头盔（5 级 · 护头）", "price": 3800 }
   ]
 }

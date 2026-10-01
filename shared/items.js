@@ -335,9 +335,18 @@
       const g = goods.find(x => x.id === action.itemId);
       if (!g || p.money < g.price) return { ok: false, profile: p, msg: '钱不够' };
       p.money -= g.price;
-      const slot = p.stash.find(s => s.itemId === action.itemId);
-      if (slot) slot.count = (slot.count || 1) + 1;
-      else p.stash.push({ itemId: action.itemId, count: 1 });
+      // v0.15.1 修复：**装备类（有 slot 的护具/头盔）不可堆叠** —— 每件必须独立成条。
+      //   旧实现无差别 `slot.count++`：买两件护甲会并成一条 count=2，经 syncProfile 派生成
+      //   「一块 3×3 却代表两件」，表现为「买了 2 件仓库只有 1 件、耐久也只记一份」。
+      const def = LOOT[action.itemId] || {};
+      const isEquip = Array.isArray(def.slot) && def.slot.length > 0;
+      if (isEquip) {
+        p.stash.push({ itemId: action.itemId, count: 1 });
+      } else {
+        const slot = p.stash.find(s => s.itemId === action.itemId);
+        if (slot) slot.count = (slot.count || 1) + 1;
+        else p.stash.push({ itemId: action.itemId, count: 1 });
+      }
       return { ok: true, profile: p, msg: `购买 ${g.label || action.itemId}` };
     }
     if (action.type === 'buyWeapon') {
