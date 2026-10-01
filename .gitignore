@@ -17,3 +17,4 @@ dist/
 .workbuddy/_*_profile*/
 .workbuddy/ui_regression/
 .workbuddy/armor_shots/
+.workbuddy/trader_shots/
