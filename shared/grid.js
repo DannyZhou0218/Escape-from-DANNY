@@ -68,8 +68,16 @@
     const d = defOf(itemId);
     return (d && Array.isArray(d.slot)) ? d.slot.slice() : [];
   }
-  // 可堆叠 = 非武器（武器每把独立：各有弹药/改装）
-  function isStackable(itemId) { return !isWeaponId(itemId); }
+  // 可堆叠性 = 物品的固有属性（v0.15.1 根因修复，E053）：
+  //   ① 武器：每把独立（各有弹药/改装）→ 不可堆叠
+  //   ② 装备类（slot 非空：护甲/头盔/胸挂/背包）：每件都是独立实体（各有耐久、容器内容）→ 不可堆叠
+  //   ③ 其余（弹药/消耗品/杂货）：按 stackOf 上限堆叠
+  //   旧实现 `return !isWeaponId(itemId)` 只排除武器 → 护具被当可堆叠：连买两件会并成一条 count=2，
+  //   表现为「买两件但仓库只有一件、两件耐久只记一份」（用户实测反馈 E053）。
+  function isStackable(itemId) {
+    if (isWeaponId(itemId)) return false;
+    return slotsFor(itemId).length === 0;
+  }
   // 堆叠上限：物品级 stackMax 优先，缺省回落调参表（用户 2026-09-26 决策：统一上限）
   function stackOf(itemId) {
     const d = defOf(itemId);

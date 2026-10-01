@@ -1824,7 +1824,9 @@ function renderTrader() {
   if (!el) return;
   el.innerHTML = '<div style="color:#90a4ae;font-size:12px;margin-bottom:8px">出售战利品换钱，购买补给</div>' +
     TRADER_GOODS.map(g => {
-      const owned = profile.stash.find(s => s.itemId === g.id);
+      // v0.15.1：护具不可堆叠 → 同类可能有多条，数量必须按条目求和（旧实现只取第一条，拥有 2 件却显示 ×1）
+      const ownedTotal = profile.stash.filter(s => s.itemId === g.id).reduce((a, b) => a + (b.count || 1), 0);
+      const owned = ownedTotal ? { count: ownedTotal } : null;
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px;color:#cfd8dc">
         <span>${g.label}${owned ? ` <span style="color:#ffd54f">×${owned.count || 1}</span>` : ''}</span>
         <button class="modbtn" onclick="window._exfilBuy('${g.id}')">${g.price}₽ 买</button>

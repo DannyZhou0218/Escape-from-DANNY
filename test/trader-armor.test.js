@@ -173,3 +173,74 @@ test('护具不进弹药库：买护甲不会污染 ammoLib', () => {
   const total = Object.values(p.ammoLib || {}).reduce((a, b) => a + b, 0);
   assert.equal(total, 0, '护甲不得计入弹药持有量');
 });
+
+// ---------- 6. 单机购买路径（Loadout.addToGrid）也必须不可堆叠（E053 根因修复） ----------
+// 背景：brw-ver 浏览器实测发现「买 6B13 两次 → 仓库仍 1 条 count=2」——单机走 addToGrid，
+//   而堆叠判定在 grid.isStackable（旧实现只排除武器）→ 两条购买路径语义不一致。
+//   修复放在根上（grid.isStackable 排除非空 slot 的装备类），本组测试锁死该行为。
+const Grid = require('../shared/grid');
+
+test('根因锁：isStackable 语义表（装备类不可堆叠，弹药/消耗品/杂货可堆叠）', () => {
+  const notStackable = ['w_ak74', 'armor_paca', 'armor_6b13', 'helm_ssh68', 'helm_alt',
+    'rig_scav', 'rig_blackrock', 'bp_scav', 'bp_pilgrim'];
+  for (const id of notStackable) assert.equal(Grid.isStackable(id), false, id + ' 不可堆叠');
+  const stackable = ['545x39', '9x18', '919', '762x39', '762x54',
+    'bandage', 'ifak', 'painkiller', 'splint', 'ammo_box_545', 'junk', 'bolt'];
+  for (const id of stackable) assert.equal(Grid.isStackable(id), true, id + ' 必须可堆叠');
+});
+
+test('单机路径：连买两件护甲 → 仓库里是两条独立条目（不是 count=2）', () => {
+  let p = freshProfile(20000);
+  let r = Loadout.addToGrid(p, 'armor_6b13', 1);
+  assert.equal(r.ok, true);
+  p = r.profile;
+  r = Loadout.addToGrid(p, 'armor_6b13', 1);
+  assert.equal(r.ok, true);
+  p = r.profile;
+  const entries = (p.grid.items || []).filter((e) => e.itemId === 'armor_6b13');
+  assert.equal(entries.length, 2, '两件护甲必须是两条独立格子条目');
+  assert.deepEqual(entries.map((e) => e.count || 1), [1, 1]);
+});
+
+test('单机路径：连买两件头盔 → 两条独立条目', () => {
+  let p = freshProfile(20000);
+  p = Loadout.addToGrid(p, 'helm_alt', 1).profile;
+  p = Loadout.addToGrid(p, 'helm_alt', 1).profile;
+  const entries = (p.grid.items || []).filter((e) => e.itemId === 'helm_alt');
+  assert.equal(entries.length, 2);
+});
+
+test('单机路径：胸挂/背包同样不可堆叠（每件都是独立容器）', () => {
+  let p = freshProfile(20000);
+  p = Loadout.addToGrid(p, 'rig_scav', 1).profile;
+  p = Loadout.addToGrid(p, 'rig_scav', 1).profile;
+  assert.equal((p.grid.items || []).filter((e) => e.itemId === 'rig_scav').length, 2, '两个胸挂必须独立');
+  p = Loadout.addToGrid(p, 'bp_scav', 1).profile;
+  p = Loadout.addToGrid(p, 'bp_scav', 1).profile;
+  assert.equal((p.grid.items || []).filter((e) => e.itemId === 'bp_scav').length, 2, '两个背包必须独立');
+});
+
+test('单机路径回归：消耗品仍合并成一条 count=2', () => {
+  let p = freshProfile(20000);
+  p = Loadout.addToGrid(p, 'bandage', 1).profile;
+  p = Loadout.addToGrid(p, 'bandage', 1).profile;
+  const entries = (p.grid.items || []).filter((e) => e.itemId === 'bandage');
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].count, 2);
+});
+
+test('两条购买路径语义一致：联机 tradeProfile 与单机 addToGrid 结果同形', () => {
+  // 联机：trade → syncProfile
+  let online = buy(freshProfile(20000), 'armor_paca');
+  online = buy(online.profile, 'armor_paca');
+  const onlineGrid = Loadout.syncProfile(online.profile).profile;
+  const onlineCnt = (onlineGrid.grid.items || []).filter((e) => e.itemId === 'armor_paca').length;
+  // 单机：addToGrid
+  let solo = freshProfile(20000);
+  solo = Loadout.addToGrid(solo, 'armor_paca', 1).profile;
+  solo = Loadout.addToGrid(solo, 'armor_paca', 1).profile;
+  const soloCnt = (solo.grid.items || []).filter((e) => e.itemId === 'armor_paca').length;
+  assert.equal(onlineCnt, 2, '联机路径应得到 2 条');
+  assert.equal(soloCnt, 2, '单机路径应得到 2 条');
+  assert.equal(onlineCnt, soloCnt, '两条路径语义必须一致');
+});
