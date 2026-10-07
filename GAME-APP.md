@@ -38,7 +38,7 @@
   * 用 **9091** 而不是 9090：A1 会 taskkill 该端口，用 9090 会误杀正在跑的主线服务
   * A6 已于 v0.15.0 改造：「页面版本号 === `/health` 的 version 且无 `{{VERSION}}` 残留」（原断言 `/v0\.1\.\d|EXFIL/` 恒真，属假校验，见 E052）
 - 服务器核心逻辑改前先跑 `npm test`（Node test runner，含 shared 浏览器语义用例）
-- 已知坑先查 `.workbuddy/ERROR.md`（当前 E001–E023，含根因与防错模式）
+- 已知坑先查 开发期错误台账（未随本仓库公开）（当前 E001–E023，含根因与防错模式）
 
 ## 构建纪律
 - 单一数据源：物理参数 shared/core.js（PHYSICS），地图 shared/map.js（MAP_RAW），服务器/浏览器共用
@@ -71,12 +71,11 @@ verify.js           # RVP 验收（24 项）
 - **备弹不挂在武器上**（E045）：武器实例只带**弹匣**（`ammoId`/`count`）；换弹直接从背包实体堆叠扣（`invAmmoOf` / `takeInvAmmo`），武器条目上的 `reserve` 字段已废弃（老档案会自动迁移成仓库弹药堆叠）
 - 违反后果：PM 用 5.45 这类"跨口径混用"会直接破坏核心战斗逻辑——此类缺陷由静态断言 + sim 单测双重防线拦截（见 test/sim.test.js E019 / test/browser-semantic.test.js E019）
 
-## 本机运行时路径（2026-09-30 修正：原记录的 node 路径已失效）
-- Node.js（**2026-09-30 修正：原记录的 `22.22.2-2` 已不存在，按此路径启动会失败**）：
-  1. 托管 binaries：`<用户目录>`（当前实际存在的版本目录）
-  2. 会话运行时：`<用户目录>`（版本随环境变化）
-  3. **探活原则**：路径失效时先 `ls versions/` 取真实目录名，或直接遍历候选列表取第一个存在的（打包脚本已按此实现，可用 `EXFIL_NODE` 覆盖）
-- Python：`<用户目录>`（未变）
+## 运行时路径约定（2026-09-30 修正）
+- Node.js：**不要硬编码绝对路径**。用「候选列表 + 探活（取第一个存在的）」或环境变量覆盖：
+  1. 打包内置 Node 可用 `EXFIL_NODE` 指定；
+  2. 本地开发直接 `node --version` 确认版本（本项目在 Node 22 与 24 上验证通过）。
+- Python（仅打包与文档生成脚本用）：Python 3.13 + `python-docx`。
 - 约定：所有脚本/命令统一从 GAME-APP.md 读取路径，不硬编码到别处；路径失效时先 ls versions/ 目录确认真实版本目录名
 
 ## 调参指南（v0.7.0 起：数值与逻辑分离）
@@ -137,9 +136,17 @@ verify.js           # RVP 验收（24 项）
 
 - **版本号单一数据源**：`package.json.version` 为唯一权威；`server/server.js` require 读取；`public/index.html` 三处用 `{{VERSION}}` 占位，由服务器对 `/`、`/index.html` 现场注入（不缓存）。
 - **护甲/穿透/命中部位**（新系统）：`content.json` 的 `ammo[口径]` 带 `dmg`/`pen`，护具带 `armorClass`/`dur`/`cover`；`sim.js` 按「头/胸」部位 + 护甲等级与穿深结算减伤与耐久消耗。配置项在 `tuning.combat`。
-- **联机事件归属**：客户端联机分支改本地状态前**必须**判 `m.id === myId`（G7 串台已修复；回归脚本 `.workbuddy/build/verify_g7_crosstalk.js`）。
+- **联机事件归属**：客户端联机分支改本地状态前**必须**判 `m.id === myId`（G7 串台已修复；回归脚本 本地验收脚本 `verify_g7_crosstalk.js`）。
 - **联机携带链**：进图携带统一走 `Items.takeCarryFromContainers(profile)`（单机与联机一致），调用后必须落盘。
 - **快捷使用**：协议 `{type:"quickUse", index}`，仅 `src === "rig"` 放行；`useItem` 语义不变。
 - **打包链**：构建脚本根目录改为 `EXFIL_SRC` / `EXFIL_DIST` / `EXFIL_NODE`（默认=脚本所在仓库）；`build_demo_package.js` 与 `verify_demo_package.js` 均带**逐文件 sha256「源码 ↔ 包内」校验**，不一致即失败（E049）。
-- **验收基础设施**：新增 `.workbuddy/build/assert-ports-free.js`（fail-open 端口守卫），验收脚本/探针全覆盖；`PORT`/`CDP_PORT` 支持环境变量覆盖。
-- 缺陷台账新增 **E049–E052**；勿回退清单见 `.workbuddy/memory/MEMORY.md` 第十八节。
+- **验收基础设施**：新增 本地验收脚本 `assert-ports-free.js`（fail-open 端口守卫），验收脚本/探针全覆盖；`PORT`/`CDP_PORT` 支持环境变量覆盖。
+- 缺陷台账新增 **E049–E052**；勿回退清单见 开发期长期记忆 第十八节。
+
+---
+
+## 过程档案说明
+
+本项目的开发过程档案（错误台账 `E001–E053`、长期记忆、协作板、诊断探针、浏览器验收脚本、验收截图）
+保存在**本地开发副本**中，**未随本仓库公开**。因此源码注释里出现的 `E0xx` 编号是历史缺陷编号，
+对应条目不在本仓库内。
