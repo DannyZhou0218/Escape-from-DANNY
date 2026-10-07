@@ -10,6 +10,27 @@ if errorlevel 1 (
   exit /b 1
 )
 
+rem ---- Dependency check ----
+rem A fresh git clone never contains node_modules; it is gitignored.
+rem Without it the server crashes with: Cannot find module ws
+rem So install dependencies once, automatically.
+if not exist "node_modules\ws" (
+  echo [INFO] First run: installing dependencies ws + three ...
+  where npm >nul 2>nul
+  if errorlevel 1 (
+    echo [ERROR] npm not found. Install Node.js which includes npm, then run:  npm install
+    pause
+    exit /b 1
+  )
+  call npm install
+  if not exist "node_modules\ws" (
+    echo [ERROR] Dependency install failed. Please run manually:  npm install
+    pause
+    exit /b 1
+  )
+  echo [INFO] Dependencies ready.
+)
+
 echo ============================================
 echo   EXFIL ZONE  -  Local Server
 echo ============================================
